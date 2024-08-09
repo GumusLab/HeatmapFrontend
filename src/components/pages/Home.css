@@ -1,0 +1,48 @@
+/* #9ED2F2*/
+.input-box{
+    background-color: #1E90FF;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    width: 10 rem;
+    margin-bottom: 15px;
+}
+.input-text{
+    margin: 10px;
+    color: #ffffff;
+}
+.header{
+    display: flex;
+    justify-content: center;
+}
+
+.wrapper{
+    display: flex;
+    height: 90vh;
+}
+.border{
+    width: 10rem;
+    background-color: #ffffff;
+    height: 90vh;
+}
+
+.home{
+    flex:1;
+    height: 90vh;
+}
+
+.heatmap{
+    /*border: 1px solid #000000; */
+    height: 55vh;
+}
+
+
+.body{
+    display:flex;
+    flex-direction: column;
+}
+
+html,body {
+    height:100%;
+}

@@ -1,0 +1,30 @@
+.slider {
+    position: relative;
+    width: 200px;
+    /* Adjust width as desired */
+    height: 0;
+    border-bottom: none;
+    border-left: 100px solid transparent;
+    /* Adjust size as desired */
+    border-right: 100px solid transparent;
+    /* Adjust size as desired */
+    border-top: 200px solid #FF0000;
+    /* Replace with your desired color */
+    cursor: pointer;
+}
+
+.slider-thumb {
+    position: absolute;
+    top: -10px;
+    /* Adjust position as desired */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    /* Adjust size as desired */
+    height: 20px;
+    /* Adjust size as desired */
+    background-color: #FFFFFF;
+    /* Replace with your desired color */
+    border-radius: 50%;
+    cursor: grab;
+}

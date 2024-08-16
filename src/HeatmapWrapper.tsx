@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import 'react-app-polyfill/ie11';
 import { DeckGLHeatmap } from './DeckGLHeatmap';
 // import * as d from './data/rnaSeq_data_patient_1000_rows.json';
-import * as d from './data/cytof_data_patient.json';
 
 import './wrapper.css';
 import { CircularProgress } from '@mui/material';
@@ -14,7 +13,7 @@ function truncateLabel(label:string,truncateLength:number){
   }
   return label;
 }
- const HeatmapWrapper = () => {
+ const HeatmapWrapper = (d: any) => {
 
   const containerRef = React.useRef<HTMLDivElement|null>(null);
   console.log(`this is container ref `, containerRef)

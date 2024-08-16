@@ -3,8 +3,12 @@ import "./Home.css";
 import heatmap from "./heatmap.png";
 import HeatmapWrapper from "../../HeatmapWrapper";
 import {processHeatmapData} from "../../backendApi/heatmapData"
+
+import * as d from '../../data/cytof_data_patient.json';
+
+
 function Home() {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(d);
 
   useEffect(() => {
     if (selectedFile) {
@@ -60,7 +64,7 @@ function Home() {
             </div>
 
             <div className="heatmap">
-              <HeatmapWrapper />
+              <HeatmapWrapper d={selectedFile}/>
             </div>
           </div>
         </div>

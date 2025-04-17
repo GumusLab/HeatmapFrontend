@@ -1,6 +1,7 @@
-/* #9ED2F2*/
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
+
 .input-box{
-    background-color: #1E90FF;
+    /* background-color: #1E90FF; */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -20,16 +21,73 @@
 .wrapper{
     display: flex;
     height: 90vh;
+    margin-top: 8px;
 }
-.border{
-    width: 10rem;
-    background-color: #ffffff;
-    height: 90vh;
+
+/* .extraSpace {
+    width: 10rem; 
+    background-color: #ffffff; 
+    height: 90vh; 
+} */
+
+.extraSpace {
+    width: 10rem; /* Define a fixed width */
+    height: 100%; /* Full height to match content */
+    display: flex;
+    align-items: flex-end; /* Aligns the logo to the bottom */
+    justify-content: flex-end; /* Aligns the logo to the right */
+    padding: 10px; /* Add some spacing from the edges */
+    box-sizing: border-box;
 }
+
+/* Style for the logo */
+.logo {
+    width: 60px; /* Small size */
+    height: auto; /* Maintain aspect ratio */
+}
+
+.giflogo {
+    position: absolute;
+    top: -35px;
+    left: 185px;
+    width: 200px; /* Small size */
+    height: auto; /* Maintain aspect ratio */
+    mix-blend-mode: multiply; /* Try multiply, overlay, or screen */
+    z-index: 4000;
+}
+
+.circleText {
+    position: absolute;
+    top: 20px;
+    left: 225px;
+    height: auto; /* Maintain aspect ratio */
+    z-index: 4000;
+}
+
+.circleText {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;  /* Adjust size as desired */
+    margin: 0;
+    padding: 0;
+    text-align: center;
+  }
+  
+  .circleText-cluster {
+    color: rgb(156, 55, 156);
+    font-weight: 600; /* Bold if desired */
+  }
+  
+  .circleText-chirp {
+    color: #1b98e0;
+    font-weight: 600; /* Bold if desired */
+  }
 
 .home{
     flex:1;
     height: 90vh;
+    gap: "0px";
+    margin-top:0px;
+    /* border: 1px solid black; */
 }
 
 .heatmap{
@@ -41,6 +99,8 @@
 .body{
     display:flex;
     flex-direction: column;
+    gap: "0px";
+
 }
 
 html,body {

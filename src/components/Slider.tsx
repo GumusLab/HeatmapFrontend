@@ -1,6 +1,7 @@
 
 import Box from "@mui/material/Box";
 import Slider from "@mui/material/Slider";
+import {HEATMAP_WIDTH} from "../const"
 import * as React from "react";
 
 function valuetext(value: number) {
@@ -31,8 +32,8 @@ export default function CustomSlider({ direction="horizontal",setClusterValue,wi
         width: direction === 'vertical'?"20px":"100px",
         height: direction === 'vertical'?"100px":"20px",
         position: "absolute",
-        top: direction === "vertical"?`${-width}px`:"100%",
-        left: direction === 'vertical'?"100%":`-${width}px`
+        top: direction === "vertical"?`${0}%`:"90%",
+        left: direction === 'vertical'?`${98}%`:`${width}px`
       }}
     >
       <Slider

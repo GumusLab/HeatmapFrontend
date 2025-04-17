@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
+
+.wrapper {
+    display: flex;
+    height: 90vh;
+    margin-top: 20px;
+}
+
+.extraSpace {
+    width: 10rem; /* Matches the spacing in Home.jsx */
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.about {
+    flex: 1;
+    height: 90vh;
+    margin-top: 0px;
+}
+
+img {
+    border-radius: 8px;
+}
+
+.giflogo {
+    position: absolute;
+    top: -35px;
+    left: -20px;
+    width: 200px; /* Small size */
+    height: auto; /* Maintain aspect ratio */
+    mix-blend-mode: multiply; /* Try multiply, overlay, or screen */
+}
+
+.circleText {
+    position: absolute;
+    top: 20px;
+    left: 10px;
+    height: auto; /* Maintain aspect ratio */
+}
+
+.circleText {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;  /* Adjust size as desired */
+    margin: 0;
+    padding: 0;
+    text-align: center;
+  }
+  
+  .circleText-cluster {
+    color: purple;
+    font-weight: 600; /* Bold if desired */
+  }
+  
+  .circleText-chirp {
+    color: blue;
+    font-weight: 600; /* Bold if desired */
+  }

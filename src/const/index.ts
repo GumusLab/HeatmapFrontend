@@ -8,6 +8,18 @@ export const MONOSPACE_CHAR_WIDTH_PROPORTION = 0.7;
 export const CELL_TO_LABEL_SIZE_PROPORTION = 0.75;
 export const MAX_CATEGORIES = 3;
 export const OPACITY = 1;
+export const CATEGORY_LAYER_HEIGHT = 7;
+export const INITIAL_GAP = 1;
+export const LAYER_GAP = 1;
+export const CLUSTER_LAYER_HEIGHT  = 5;
+export const HEATMAP_PARENT_HEIGHT_RATIO = 90;
+export const HEATMAP_PARENT_WIDTH_RATIO = 100;
+export const HEATMAP_HEIGHT = 100;
+export const HEATMAP_WIDTH = 97;
+export const DEFAULT_LABEL_GAP = 2;
+
+
+
 export const IDS = {
   VIEWS: {
     ROW_LABELS: 'row-labels-view',

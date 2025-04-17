@@ -1,4 +1,5 @@
 import { RefObject, useEffect, useMemo, useState } from 'react';
+import {HEATMAP_PARENT_HEIGHT_RATIO, HEATMAP_PARENT_WIDTH_RATIO} from '../const'
 
 export const useDimensions = (container: HTMLDivElement) => {
   const [dimensions, setDimensions] = useState<[number, number] | null>(null);
@@ -6,8 +7,8 @@ export const useDimensions = (container: HTMLDivElement) => {
     () =>
       new ResizeObserver((entries) => {
         setDimensions([
-          entries[0].contentRect.width,
-          entries[0].contentRect.height,
+          HEATMAP_PARENT_WIDTH_RATIO/100*entries[0].contentRect.width,
+          HEATMAP_PARENT_HEIGHT_RATIO/100*entries[0].contentRect.height,
         ]);
       }),
     []

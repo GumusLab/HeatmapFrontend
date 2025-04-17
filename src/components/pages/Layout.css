@@ -1,4 +1,4 @@
-.logo{
+/* .logo{
     height: 50px;
     width: 59.5px;
     padding: 0px;
@@ -41,7 +41,7 @@
 nav{
     position: sticky;
     background: #1E90FF;
-    height: 50px;
+    height: 40px;
     display: flex;
     top: 0;
     z-index: 999;
@@ -54,4 +54,329 @@ nav{
 
 h1{
     color: #ffffff;
+} */
+
+/* #4da2e8; */
+
+
+
+/* Navbar Styling */
+/* .navbar {
+    display: flex;
+    justify-content: center;
+    position: absolute;
+    top: 10px;
+    left: 0;
+    width: 100%;
+    z-index: 10;
+  } */
+
+
+
+
+
+
+
+
+
+
+/* 
+   .navbar {
+    position: fixed;
+    top: 10px; 
+    left: 50%;
+    transform: translateX(-50%); 
+    width: 70%; 
+    background: white;
+    z-index: 1000;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    border: 1px solid black;
+    margin: 0;
+    padding: 0;
 }
+  
+  .tool-name {
+    font-size: 22px;
+    font-weight: bold;
+    color: #004080;
+    margin-right: 20px;
+  }
+  
+  .nav-menu {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: space-evenly; 
+    width: 100%;
+    border: 1px solid pink;
+  }
+  
+
+.nav-link {
+    text-decoration: none;
+    color: black;
+    font-size: 25px; 
+    font-weight: 500; 
+    font-family: 'Poppins', sans-serif; 
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s ease-in-out;
+    position: relative;
+    letter-spacing: 0.5px; 
+}
+  .nav-link.active {
+    font-size: 25px;
+    font-weight: bold;
+  }
+  
+  .nav-link.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -3px;
+    width: 100%;
+    height: 3px;
+    background-color: #146ac1;
+  }
+  
+  .nav-link:hover {
+    transform: translateY(-2px);
+  }
+
+  .logo {
+    margin-top: 10px;
+    height: 80px; 
+    width: auto; 
+    padding-left: 1.5em;
+} */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap');
+
+.navbar {
+    position: fixed;
+    top: 10px;
+    left: 52%;
+    transform: translateX(-50%);
+    width: 70%;
+    background: white;
+    z-index: 1000;
+    /* box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); */
+    border-radius: 10px;
+    /* border: 1px solid black; */
+    margin: 0;
+    padding: 0;
+    /* border:1px solid black; */
+
+}
+  
+  .nav-container {
+    display: flex;
+    justify-content: space-between; /* Space between nav-menu and nav-logo */
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .nav-menu {
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    flex: 1; /* Allow nav-menu to take available space */
+    margin: 0;
+    padding: 0;
+    margin-bottom: 5px;
+    /* border: 1px solid black; */
+  }
+  
+  .nav-logo {
+    /* This container holds the logo on the right */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    /* padding-right: 20px; 
+    margin-bottom: 0px; */
+    margin: 0px; 
+    padding: 0px;
+  }
+  
+  .logo {
+    height: 20px;
+    width: auto;
+    max-height: 50px; /* Limits the height */
+    max-width: 50px; /* Limits the width */
+    position: absolute;
+    left: 95%;
+
+}
+
+.nav-link {
+    text-decoration: none;
+    color: black;
+    font-size: 20px;
+    font-weight: 500;
+    font-family: 'Poppins', sans-serif;
+    /* font-family: 'Playfair Display', serif; */
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 15px; /* Adjust padding to fit within navbar height */
+    transition: all 0.3s ease-in-out;
+    position: relative;
+    letter-spacing: 0.5px;
+}
+
+.nav-link.active {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.nav-link.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -3px;
+    width: 100%;
+    height: 3px;
+    background-color: #146ac1;
+}
+
+.nav-link:hover {
+    transform: translateY(-2px);
+}
+
+
+
+
+
+
+
+   /* @import url("https://fonts.googleapis.com/css?family=Roboto");
+
+   body {
+     font-family: "Roboto", sans-serif;
+   }
+   
+   * {
+     margin: 0;
+     padding: 0;
+   }
+   
+   i {
+     margin-right: 10px;
+   }
+   
+
+#navbar-animmenu {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    max-width: 1100px;
+    background: #1E90FF;
+    z-index: 1000;
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+}
+   
+   #navbar-animmenu ul {
+     padding: 0px;
+     margin: 0px;
+     display: flex;
+     justify-content: center;
+     list-style: none;
+   }
+   
+   #navbar-animmenu ul li a i {
+     margin-right: 10px;
+   }
+   
+   #navbar-animmenu li {
+     list-style-type: none;
+   }
+   
+   #navbar-animmenu ul li a {
+     color: rgba(255, 255, 255, 0.8);
+     text-decoration: none;
+     font-size: 15px;
+     line-height: 45px;
+     display: block;
+     padding: 0px 20px;
+     transition-duration: 0.6s;
+     transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+     position: relative;
+   }
+   
+   #navbar-animmenu ul li a:hover {
+     color: white;
+   }
+   
+   #navbar-animmenu > ul > li.active > a {
+     color: #1E90FF;
+     background-color: transparent;
+     transition: all 0.7s;
+     font-weight: bold; 
+
+   }
+   
+   .hori-selector {
+     display: inline-block;
+     position: absolute;
+     height: 100%;
+     top: 10px;
+     left: 0px;
+     transition-duration: 0.6s;
+     transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+     background-color: #fff;
+     border-top-left-radius: 15px;
+     border-top-right-radius: 15px;
+   }
+   
+   .hori-selector .right,
+   .hori-selector .left {
+     position: absolute;
+     width: 25px;
+     height: 25px;
+     background-color: #fff;
+     bottom: 10px;
+   }
+   
+   .hori-selector .right {
+     right: -25px;
+   }
+   
+   .hori-selector .left {
+     left: -25px;
+   }
+   
+   .hori-selector .right:before,
+   .hori-selector .left:before {
+     content: "";
+     position: absolute;
+     width: 50px;
+     height: 50px;
+     border-radius: 50%;
+     background-color: #1E90FF;
+   }
+   
+   .hori-selector .right:before {
+     bottom: 0;
+     right: -25px;
+   }
+   
+   .hori-selector .left:before {
+     bottom: 0;
+     left: -25px;
+   }
+
+.content {
+    margin-top: 50px; 
+    padding: 20px;
+}
+    */

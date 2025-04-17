@@ -31,8 +31,11 @@ export type LabelConfig = {
 export type OnClickType = LayerProps['onClick'];
 export type getTooltipType = DeckProps['getTooltip'];
 export interface DeckGLHeatmapProps {
+
+  key: number;
   /** the data to display
-   * this can either be a Clustergrammer JSON or a JSON
+   * this can either be a Clustergrammer JSON 
+   * or a JSON
    * file that fits Record<string, Record<string, number>>
    */
   data: any;
@@ -40,6 +43,9 @@ export interface DeckGLHeatmapProps {
    * to the heatmap, so the heatmap can figure out its
    * dimensions accordingly and be responsive
    */
+
+  dataId: string;
+  
   container: HTMLDivElement;
   /**
    * title for row labels (replaced by the actual labels when zoomed in enough)
@@ -93,6 +99,15 @@ export interface DeckGLHeatmapProps {
     col:{[key: string]: string};
   }
 
+  // ord:{
+  //   row:string;
+  //   col:string;
+  //   rowCat: string[];
+  //   sortByRowCat:string;
+  //   colCat:string[];
+  //   sortByColCat:string
+  // }
+  
   /* Parameter for setting the result table categories */
   resultCategories?:string[]
 

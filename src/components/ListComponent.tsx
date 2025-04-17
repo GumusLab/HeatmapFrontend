@@ -35,7 +35,7 @@ const ListComponent: React.FC<ListComponentProps> = ({ selectedIndex, handleItem
                 primaryTypographyProps={{
                   style: {
                     fontSize: '14px',
-                    fontWeight: 'normal',
+                    fontWeight: 'bold',
                     fontFamily: 'Arial, sans-serif',
                     textAlign: 'center',
                     color: '#F5F5F5',

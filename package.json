@@ -1,27 +1,32 @@
+
 {
   "name": "test1",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@fortawesome/fontawesome-svg-core": "^6.7.2",
+    "@fortawesome/free-solid-svg-icons": "^6.7.2",
+    "@fortawesome/react-fontawesome": "^0.2.2",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.24.1",
-    "react-scripts": "^5.0.1",
-    "web-vitals": "^2.1.4",
     "@types/d3-scale": "^4.0.2",
-    "axios": "^1.6.5",
+    "bootstrap": "^5.3.3",
     "d3-ease": "^3.0.1",
     "d3-scale": "^4.0.2",
     "deck.gl": "^8.8.11",
+    "jquery": "^3.7.1",
     "lodash": "^4.17.21",
     "lodash-es": "^4.17.21",
     "mathjs": "^11.9.1",
-    "jspdf": "^2.5.1"
+    "react-router-dom": "^6.24.1",
+    "react-scripts": "^5.0.1",
+    "web-vitals": "^2.1.4"
   },
   "scripts": {
+    "prestart": "node scripts/build-worker-string.js",
+    "prebuild": "node scripts/build-worker-string.js",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
@@ -46,7 +51,6 @@
     ]
   },
   "devDependencies": {
-    "@types/lodash": "^4.17.6",
     "@babel/core": "^7.19.3",
     "@emotion/react": "^11.9.3",
     "@emotion/styled": "^11.9.3",
@@ -59,12 +63,15 @@
     "@storybook/addon-links": "^6.5.12",
     "@storybook/addons": "^6.5.12",
     "@storybook/react": "^6.5.12",
+    "@types/lodash": "^4.17.6",
     "@types/react": "^18.0.21",
     "@types/react-dom": "^18.0.6",
     "@types/resize-observer-browser": "^0.1.7",
     "@typescript-eslint/eslint-plugin": "^5.38.1",
     "@typescript-eslint/parser": "^5.38.1",
+    "axios": "^1.6.5",
     "babel-loader": "^8.2.5",
+    "esbuild": "^0.20.2",
     "eslint": "^8.24.0",
     "eslint-config-google": "^0.14.0",
     "eslint-config-prettier": "^8.5.0",
@@ -73,16 +80,18 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "gh-pages": "^4.0.0",
     "husky": "^8.0.1",
+    "jspdf": "^2.5.1",
     "prettier": "^2.7.1",
     "prettier-eslint": "^15.0.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-is": "^18.2.0",
     "size-limit": "^8.1.0",
     "tsdx": "^0.14.1",
     "tslib": "^2.4.0",
-    "typescript": "^4.8.4",
-    "axios": "1.6.5",
-    "jspdf": "^2.5.1"
+    "typescript": "^4.8.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -279,6 +279,12 @@ export const  generateTooltipContent: getTooltipType = (info)=>{
               }
             }
         }
+        else if(layer.id === IDS.LAYERS.ROW_LABELS){
+          return null     
+        }
+        else if(layer.id === IDS.LAYERS.COL_LABELS){
+          return null     
+        }
         else{
 
           if('visibility' in object){

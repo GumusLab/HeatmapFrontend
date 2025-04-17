@@ -1,15 +1,22 @@
 import { TextLayer } from '@deck.gl/layers/typed';
 import {
+  BASE_ZOOM,
   CELL_TO_LABEL_SIZE_PROPORTION,
   DEFAULT_LABEL_MAX_SIZE,
   DEFAULT_LABEL_OFFSET,
   IDS,
   LABEL_SCALE,
-  MIN_LABEL_CHARS
+  MIN_LABEL_CHARS,
+  CATEGORY_LAYER_HEIGHT,
+  INITIAL_GAP,
+  LAYER_GAP,
+  DEFAULT_LABEL_GAP
 } from '../../const';
 import type { LabelProps } from './labels.types';
 
 import { maybeTruncateLabel } from './maybeTruncateLabel';
+import { useState } from 'react';
+import { hover } from '@testing-library/user-event/dist/hover';
 export function getLabelsLayer({
   axis,
   title,
@@ -21,62 +28,145 @@ export function getLabelsLayer({
   labelSpace,
   searchTerm,
   order,
-  categories
+  categories,
+  // setHoveredLabel,
+  // hoveredLabel
 }: LabelProps & { axis: 'row' | 'column'}) {
+
 
   if (heatmapState) {
     const { width: cellWidth, height: cellHeight } =
       heatmapState.cellDimensions;
+    const heatmapHeight = heatmapState.height;
+
+
+    // console.log('******** heatmap one fourth height is as follows ********', heatmapHeight/4)
+    // 141.05
+
     const cellSize = axis === 'row' ? cellHeight : cellWidth;
 
     const viewState = viewStates[IDS.VIEWS.HEATMAP_GRID];
     const zoom = viewState.zoom as number;
 
-    const offset = labelsConfig?.offset
+    let offset = labelsConfig?.offset
       ? labelsConfig.offset
-      : DEFAULT_LABEL_OFFSET + 2;
+      : DEFAULT_LABEL_OFFSET - 5;
+    let totalGap = 0
+
+    if(axis === "row"){
+      if(order.rowCat.length > 0) {
+        totalGap += order.rowCat.length*(CATEGORY_LAYER_HEIGHT + LAYER_GAP) + INITIAL_GAP
+      }
+      if(order.row === "cluster"){
+        totalGap += 5 + INITIAL_GAP
+      }
+
+    }
+    offset = -labelSpace/4 + totalGap + DEFAULT_LABEL_GAP
 
     const sizeMaxPixels = labelsConfig?.maxSize || DEFAULT_LABEL_MAX_SIZE;
+  //   let scale:number;
 
-    const scale = zoom
-      ? Math.max(LABEL_SCALE, LABEL_SCALE * zoom)
-      : LABEL_SCALE;
+  //   if(zoom >= 0){
+  //     scale = Math.max(LABEL_SCALE, LABEL_SCALE * zoom)
+  //   }
+  //   else if(zoom < 0){
+  //   scale = LABEL_SCALE * Math.exp(zoom);   
+  //  }
+  //   else{
+  //     scale = LABEL_SCALE
+  //   }
+
+    let scale: number;
+
+    // BASE_ZOOM is 1, so we'll normalize around that
+    const normalizedZoom = zoom - BASE_ZOOM; // This makes zoom=1 the "normal" size point
+
+    // Use exponential scaling that matches deck.gl's internal scaling
+    scale = LABEL_SCALE * Math.pow(2, normalizedZoom);
+
+    // Add constraints to prevent extreme sizes at zoom boundaries
+    // Assuming you want labels to be at most 8x larger and at most 8x smaller than the base size
+    const minScale = LABEL_SCALE * 0.125; // 1/8th of base size
+    const maxScale = LABEL_SCALE * 8;     // 8x base size
+    scale = Math.min(Math.max(scale, minScale), maxScale);
+    // const scale = zoom
+    //   ? Math.max(LABEL_SCALE, LABEL_SCALE * zoom)
+    //   : LABEL_SCALE;
+
+    console.log('******* scale is as follows ********',scale)
+    console.log('********* Label scale is as follows *******',LABEL_SCALE)
+    console.log('******** zoom is as follows *********', zoom)
 
 
-    const getPosition = (d:any) => {
+      const getPosition = (d:any) => {
+        // const rowPosition = [-offset,d.position * cellSize];
+        // const rowPosition = [-offset,d.position * cellHeight + 0.5*cellHeight - heatmapHeight/4];
+        const rowPosition = [-offset,d.position * cellHeight + 0.5*cellHeight - heatmapHeight/4];
 
-      // console.log('axis is as follows *****', axis)
-      // console.log('offset is as follows *****', offset)
-      // console.log(order.rowCat)
-      const rowPosition = [-offset, 0.5 * cellSize + d.position * cellSize];
-      let rowOffset:number = 0;
-        if( axis === 'row'){
-          if(order.row === 'cluster'){
-            rowOffset -= 5
-        }
-        if(order.rowCat.length>0){
-          for(let i=0 ; i< order.rowCat.length;i++){
-            rowOffset -= 5
+
+        let rowOffset:number = 0;
+          if( axis === 'row'){
+            if(order.row === 'cluster'){
+              rowOffset -= 5
+          }
+          if(order.rowCat.length>0){
+            for(let i=0 ; i< order.rowCat.length;i++){
+              rowOffset -= 5
+            }
           }
         }
+        return (axis === 'row' ? [rowPosition[0]+rowOffset,rowPosition[1]] : rowPosition.reverse()) as [
+          number,
+          number
+        ];
       }
-      return (axis === 'row' ? [rowPosition[0]+rowOffset,rowPosition[1]] : rowPosition.reverse()) as [
-        number,
-        number
-      ];
-      // return (axis === 'row' ? rowPosition : rowPosition.reverse()) as [
-      //   number,
-      //   number
-      // ];
-    }
+
+    // const getPosition = (d:any) => {
+
+    //   const rowPosition = [-offset, 0.5 * cellSize + d.position * cellSize];
+    //   let rowOffset:number = 0;
+    //     if( axis === 'row'){
+    //       if(order.row === 'cluster'){
+    //         rowOffset -= 5
+    //     }
+    //     if(order.rowCat.length>0){
+    //       for(let i=0 ; i< order.rowCat.length;i++){
+    //         rowOffset -= 5
+    //       }
+    //     }
+    //   }
+
+    //   return (axis === 'row' ? [rowPosition[0]+rowOffset,rowPosition[1]] : rowPosition.reverse()) as [number,number];
+    // }
     return [
       new TextLayer({
         id: axis === 'row' ? IDS.LAYERS.ROW_LABELS : IDS.LAYERS.COL_LABELS,
         data: axis === 'row' ? dataState.rowLabels : dataState.colLabels,
         fontFamily:'Arial, sans-serif',
         getPosition:getPosition,
-        getElevation:0,
         background:true,
+        // onHover: ({ object, index }) => {
+        //   if (object) {
+        //     setHoveredLabelIdx((prev:any) => ({
+        //       ...prev,
+        //       [axis]: index,
+        //     })); // Update only the hovered label for the current axis
+        //   } else {
+        //     setHoveredLabelIdx((prev:any) => ({
+        //       ...prev,
+        //       [axis]: null,
+        //     })); // Reset hover for the current axis
+        //   }
+        // },
+
+        // onHover: ({ object, index }) => {
+        //   if (object) {
+        //     setHoveredLabel(index); // Update only the hovered label for the current axis
+        //   } else {
+        //     setHoveredLabel(null); // Reset hover for the current axis
+        //   }
+        // },
         getAngle: labelsConfig?.angle
           ? labelsConfig.angle
           : axis === 'row'
@@ -94,16 +184,24 @@ export function getLabelsLayer({
         },
         // getColor: (d)=> d.text.trim() === searchTerm?.trim() ? [255, 0, 0]:[0,0,0],
         getColor: [0,0,0],
-        // getBorderColor: ()=>[0, 0, 0, 255],
+        // getBorderColor: ()=>[0, 0, 255, 255],
         // getBorderWidth: ()=>2,
         getBackgroundColor:(d)=> d.text.trim() === searchTerm?.trim() ? [255, 255, 0,255]:[255,255,255,255],
-        
-        getSize:
-          title && scale < 2 ? 0 : cellSize * CELL_TO_LABEL_SIZE_PROPORTION,
+
+        // getSize: (d, { index }) => {
+        //   // Soft zoom effect logic for labels
+        //   if (hoveredLabel === index) {
+        //     return 10; // Increase size on hover
+        //   }
+        //   return cellSize * CELL_TO_LABEL_SIZE_PROPORTION; // Default size
+        // },
+
+        // getSize:
+        //   title && scale < 2 ? 0 : cellSize * CELL_TO_LABEL_SIZE_PROPORTION,
         sizeUnits: 'meters',
         // getTextAnchor: 'middle',
         getTextAnchor: axis === 'row' ? 'end' : 'start',
-        sizeMaxPixels,
+        sizeMaxPixels:cellSize,
         sizeScale: scale,
         pickable: true,
         onClick,
@@ -116,16 +214,16 @@ export function getLabelsLayer({
             },
             delay: 1000,
           },
-          getElevation: {
-            type: 'interpolation',
-            duration: 2000,
-            easing: (t:any) => t*t,
-            delay: 1000,
+          getSize: {
+              type: 'interpolation',
+              duration: 200,
+              easing: (t:any) => t * (2 - t), // Ease-out effect
             },
         },
         updateTriggers: {
-          getPosition: [sizeMaxPixels, cellSize, offset, order],
+          getPosition: [sizeMaxPixels, cellSize, offset, order, heatmapHeight],
           // data: [dataState.rowLabels],
+          // getSize: [cellSize, scale, hoveredLabel],
           getSize: [cellSize, scale],
           sizeScale: [scale],
           sizeMaxPixels: [sizeMaxPixels],

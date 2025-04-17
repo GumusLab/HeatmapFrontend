@@ -76,11 +76,11 @@ const Legend2 = ({
       >
         {/* Min Value */}
         <div>
-          <h3 style={{fontWeight: 'normal', fontFamily: 'Arial, sans-serif'}}>{min.toFixed(1)}</h3>
+          <h3 style={{fontWeight: 'normal', fontFamily: 'Arial, sans-serif', fontSize:'15px'}}>{min.toFixed(1)}</h3>
         </div>
         {/* Max Value */}
         <div>
-          <h3 style={{fontWeight: 'normal', fontFamily: 'Arial, sans-serif'}}>{max.toFixed(1)}</h3>
+          <h3 style={{fontWeight: 'normal', fontFamily: 'Arial, sans-serif', fontSize:'15px'}}>{max.toFixed(1)}</h3>
         </div>
       </div>
     </div>

@@ -20,6 +20,8 @@ import ListComponent from './ListComponent';
 import SearchBox from './SearchBox';
 import SimpleSelection from './SimpleSelection';
 import MultipurposeSlider from './opcatiySlider';
+import ReplayIcon from '@mui/icons-material/Replay';
+
 const orderArray = ['alphabetically','cluster','sum','variance']
 // interface order{
 //     row:string;
@@ -29,6 +31,12 @@ const orderArray = ['alphabetically','cluster','sum','variance']
 //     colCat:string[];
 //     sortByColCat:boolean;
 // }
+interface CropBox {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
 export default function PersistentDrawerLeft({
   parentContainerRef,
   setIsDrawerOpen,
@@ -47,7 +55,9 @@ export default function PersistentDrawerLeft({
   setSearchTerm,
   downloadHeatmap,
   downloadMatrix,
-  setCropping
+  setCropping,
+  setFilteredIdxDict,
+  cropBox
 }: {
   parentContainerRef: HTMLDivElement;
   setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -67,8 +77,11 @@ export default function PersistentDrawerLeft({
   downloadHeatmap:any;
   downloadMatrix:any;
   setCropping: any;
+  setFilteredIdxDict:any;
+  cropBox:CropBox|null;
+
 }) {
-  const [isDrawerOpen, setDrawerOpen] = useState(false);
+  const [isDrawerOpen, setDrawerOpen] = useState(true);
   const theme = useTheme();
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [selectedColIndex, setSelectedColIndex] = useState(0);
@@ -126,7 +139,7 @@ export default function PersistentDrawerLeft({
     setIsDrawerOpen(false);
   };
   return (
-    <div >
+    <div style={{width: drawerWidth,height:'100%',margin:'0px'}}>
       <IconButton
         color="inherit"
         aria-label="open drawer"
@@ -134,9 +147,9 @@ export default function PersistentDrawerLeft({
         edge="start"
         sx={{
         position: 'absolute',
-        top: 15,
+        top: 1,
         left: 2,
-        zIndex: 1, // Add this line to set the z-index of the IconButton
+        zIndex: 1000, // Add this line to set the z-index of the IconButton
         mr: 0, ...(isDrawerOpen && { display: 'none' }) }}
       >
         <MenuIcon />
@@ -148,7 +161,7 @@ export default function PersistentDrawerLeft({
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            top: 15,
+            top: 1,
             left: 2,
             position:'absolute',
           },
@@ -200,6 +213,11 @@ export default function PersistentDrawerLeft({
           </IconButton>
 
       </Tooltip>
+      {
+        cropBox ?  
+        <IconButton onClick={setFilteredIdxDict} >
+        <ReplayIcon/>
+        </IconButton> :
         <Tooltip
         title="Crop Mode"   
         slotProps={{
@@ -219,6 +237,7 @@ export default function PersistentDrawerLeft({
           </IconButton>
 
       </Tooltip>
+      }
 
           <IconButton onClick={handleDrawerClose}>
             {theme.direction === 'ltr' ? <ChevronLeftIcon /> : <ChevronRightIcon />}
@@ -297,7 +316,11 @@ export default function PersistentDrawerLeft({
             <SimpleSelection elements={['logFC','nLogP']} setState={setState} initialValue='logFC' labelName='Value Type'/>
         </div>
         }
+         {/* <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'30px',display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'}}>
+            <SimpleSelection elements={['logFC','nLogP']} setState={setState} initialValue='logFC' labelName='Distance Type'/>
+        </div> */}
       </Drawer>
-    </div>
+      </div>
+    // </div> 
   );
 }

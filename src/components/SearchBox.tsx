@@ -91,7 +91,9 @@ type SearchBoxProps = {
 const SearchBox: React.FC<SearchBoxProps> = ({ elements, setSearchTerm }) => {
   const [searchText, setSearchText] = useState('');
   const [filteredOptions, setFilteredOptions] = useState<string[]>([]);
-  const searchIconRef = useRef<HTMLDivElement>(null);
+  // const searchIconRef = useRef<HTMLDivElement>(null);
+  const searchIconRef = useRef<SVGSVGElement>(null);
+
   
   // Update filtered options whenever searchText changes, but don't update the search term yet
   useEffect(() => {
@@ -144,10 +146,13 @@ const SearchBox: React.FC<SearchBoxProps> = ({ elements, setSearchTerm }) => {
           width: '100%',
           '& .MuiAutocomplete-popupIndicator': { transform: 'none' },
         }}
+        // popupIcon={
+        //   <div ref={searchIconRef} onClick={triggerSearch}>
+        //     <SearchIcon />
+        //   </div>
+        // }
         popupIcon={
-          <div ref={searchIconRef} onClick={triggerSearch}>
-            <SearchIcon />
-          </div>
+          <SearchIcon ref={searchIconRef} onClick={triggerSearch} />
         }
         renderInput={(params) => (
           <TextField

@@ -22,13 +22,13 @@ function About() {
     <>
       <div className="wrapper">
         <div className="extraSpace">
-        <div className="circle-container">
+        {/* <div className="circle-container">
             <h3 className="circleText">
             <span className="circleText-cluster">Cluster</span>
             <span className="circleText-chirp">Chirp</span>
             </h3>
             <img src="AIGif_2.gif" alt="Logo1" className="giflogo" />
-        </div>
+        </div> */}
         </div> {/* Space on the left */}
 
         <div className="about">

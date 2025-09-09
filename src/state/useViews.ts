@@ -81,7 +81,7 @@
 // };
 
 
-import { OrthographicView } from '@deck.gl/core/typed';
+import { OrthographicController, OrthographicView } from '@deck.gl/core/typed';
 import { IDS,HEATMAP_WIDTH,HEATMAP_HEIGHT } from '../const';
 
 export type UseViewsProps = {
@@ -160,7 +160,7 @@ export const useViews = ({
     //   right: heatmapWidth,
     // },
     controller: true,
-  });
+});
 
   return [heatmapGridView, rowLabelView, colLabelsView];
   // return [heatmapGridView,rowLabelView];

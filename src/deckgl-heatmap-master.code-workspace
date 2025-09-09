@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../Downloads/deckgl-heatmap-master"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../../primavo/PRIMAVO"
+		},
+		{
+			"path": "../../../../primavo/PRIMAVO-Backend"
+		},
+		{
+			"path": "../../../Backend/HeatmapBackend"
+		},
+		{
+			"path": "../../../../sunbeam"
+		}
+	],
+	"settings": {}
+}

@@ -1,0 +1,56 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Heatmap grid background -->
+  <g opacity="0.8">
+    <!-- Grid of small squares representing heatmap -->
+    <rect x="20" y="35" width="10" height="10" fill="#FF3333" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="32" y="35" width="10" height="10" fill="#FF7733" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="44" y="35" width="10" height="10" fill="#FFAA33" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="56" y="35" width="10" height="10" fill="#33FF33" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="68" y="35" width="10" height="10" fill="#3399FF" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="20" y="47" width="10" height="10" fill="#FFAA33" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="32" y="47" width="10" height="10" fill="#FF7733" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="44" y="47" width="10" height="10" fill="#FF3333" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="56" y="47" width="10" height="10" fill="#FFAA33" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="68" y="47" width="10" height="10" fill="#33FF33" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="20" y="59" width="10" height="10" fill="#3399FF" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="32" y="59" width="10" height="10" fill="#33FF33" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="44" y="59" width="10" height="10" fill="#FFAA33" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="56" y="59" width="10" height="10" fill="#FF7733" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+    <rect x="68" y="59" width="10" height="10" fill="#FF3333" rx="1" stroke="#FFFFFF" stroke-width="0.5"/>
+  </g>
+  <!-- Main bird/chirp character -->
+  <g transform="translate(64, 55)">
+    <!-- Bird body -->
+    <ellipse cx="0" cy="5" rx="18" ry="15" fill="#FFE135"/>
+    <!-- Bird head -->
+    <circle cx="0" cy="-8" r="12" fill="#FFE135"/>
+    <!-- Eyes -->
+    <circle cx="-5" cy="-10" r="3" fill="#1F2937"/>
+    <circle cx="5" cy="-10" r="3" fill="#1F2937"/>
+    <!-- Eye highlights -->
+    <circle cx="-4" cy="-11" r="1" fill="#FFFFFF"/>
+    <circle cx="6" cy="-11" r="1" fill="#FFFFFF"/>
+    <!-- Beak -->
+    <polygon points="0,-5 -3,-2 3,-2" fill="#FF8C00"/>
+    <!-- Wing -->
+    <ellipse cx="-8" cy="2" rx="6" ry="8" fill="#FFD700" transform="rotate(-15)"/>
+    <!-- Tail feathers -->
+    <ellipse cx="12" cy="8" rx="4" ry="6" fill="#FFD700" transform="rotate(25)"/>
+  </g>
+  <!-- Chat bubble -->
+  <g transform="translate(85, 40)">
+    <ellipse cx="0" cy="0" rx="15" ry="10" fill="#F8F9FA" stroke="#1F2937" stroke-width="2"/>
+    <!-- Chat dots -->
+    <circle cx="-6" cy="-1" r="2" fill="#4B5563"/>
+    <circle cx="0" cy="-1" r="2" fill="#4B5563"/>
+    <circle cx="6" cy="-1" r="2" fill="#4B5563"/>
+    <!-- Chat bubble tail -->
+    <polygon points="-10,5 -15,8 -8,8" fill="#F8F9FA" stroke="#1F2937" stroke-width="2"/>
+  </g>
+  <!-- AI sparkles -->
+  <g fill="#FFE135" opacity="0.8">
+    <polygon points="25,25 27,30 32,28 27,33 25,38 23,33 18,28 23,30" transform="scale(0.6)"/>
+    <polygon points="100,20 102,25 107,23 102,28 100,33 98,28 93,23 98,25" transform="scale(0.5)"/>
+    <polygon points="105,80 107,85 112,83 107,88 105,93 103,88 98,83 103,85" transform="scale(0.4)"/>
+  </g>
+</svg>

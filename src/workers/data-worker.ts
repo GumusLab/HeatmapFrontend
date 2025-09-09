@@ -12,7 +12,7 @@ self.addEventListener('message', (event: MessageEvent) => {
 
   if (message.messageType === 'dataState') {
     // Compute the data state based on the incoming JSON data, order, and categories
-    currentDataState = computeDataState(message.data, message.order, message.catTemporary, message.filteredIdxDict);
+    currentDataState = computeDataState(message.data, message.order, message.catTemporary);
     // Post the computed data state back to the main thread
     self.postMessage({ dataState: currentDataState });
   } else if (message.messageType === 'heatmapState') {

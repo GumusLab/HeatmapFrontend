@@ -34,7 +34,12 @@ import type {
   HeatmapStateShape,
   ViewStates,
 } from '../../types';
-
+interface CropBox {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
 export type LabelProps = {
   dataState: DataStateShape;
   viewStates: ViewStates;
@@ -52,5 +57,7 @@ export type LabelProps = {
   categories:{
     row:{[key: string]: string};
     col:{[key: string]: string};
-  }
+  };
+  filteredIdxDict: CropBox | null; // Add this to the interface
+
 };

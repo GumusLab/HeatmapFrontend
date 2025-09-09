@@ -177,7 +177,7 @@
 
 
 
-import { CATEGORY_LAYER_HEIGHT,CLUSTER_LAYER_HEIGHT,INITIAL_GAP,LAYER_GAP } from "../const";
+import { CATEGORY_LAYER_HEIGHT,CLUSTER_LAYER_HEIGHT,IDS,INITIAL_GAP,LAYER_GAP } from "../const";
 import { DeckGLHeatmapProps } from '../DeckGLHeatmap.types';
 import { DataStateShape, HeatmapStateShape, ViewStates } from '../types';
 import { order } from "../types/index";
@@ -186,15 +186,14 @@ import { getViewBorderLayer } from "./getViewBorderLayer";
 import { getHeatmapGridLayer } from './heatmapGrid/getHeatmapGridLayer';
 import { getCatLabelsLayer } from './labels/getCatLabelsLayer';
 import { getRowLabelsLayer } from './labels/getRowLabelsLayer';
+import { getViewportDebugLayer } from './getViewportDebugLayer';
 
-// export type order = {
-//                     row:string;
-//                     col:string;
-//                     rowCat:string;
-//                     sortByRowCat:boolean;
-//                     colCat:string;
-//                     sortByColCat:boolean;
-//                   };
+interface CropBox {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
 export type UseLayersProps = Pick<
   DeckGLHeatmapProps,
   'onClick' | 'labels' | 'debug' | 'rowLabelsTitle' | 'columnLabelsTitle'| 'categories'
@@ -212,6 +211,8 @@ export type UseLayersProps = Pick<
   searchTerm:string;
   pvalThreshold?:number;
   pvalData?:Record<string, Record<string, number>>;
+  isZoomedOut:boolean; // Add to dependency array
+  filteredIdxDict:CropBox|null;
 };
 
 
@@ -226,23 +227,20 @@ export const getLayers = ({
   colLabelsWidth,
   rowLabelsWidth,
   rowLabelsTitle,
-  columnLabelsTitle,
+  // columnLabelsTitle,
   searchTerm,
   order,
   categories,
   rowSliderVal,
   colSliderVal,
   opacityVal,
-  pvalThreshold,
-  pvalData,
+  // pvalThreshold,
+  // pvalData,
+  isZoomedOut,
+  filteredIdxDict
 }: UseLayersProps) => {
 
   if (dataState && heatmapState) {
-
-    console.log(columnLabelsTitle)
-    console.log(pvalThreshold)
-    console.log(pvalData)
-    console.log(opacityVal)
 
     const Layers = []
 
@@ -252,9 +250,12 @@ export const getLayers = ({
       opacityVal,
       // opacityVal,
       onClick?.heatmapCell,
-      visibleIndices, // Add this parameter
+      visibleIndices, 
+      viewStates[IDS.VIEWS.HEATMAP_GRID],
+      filteredIdxDict,
       debug,
     );
+
 
     
     Layers.push(heatmapGrid)
@@ -269,7 +270,8 @@ export const getLayers = ({
       title: rowLabelsTitle,
       searchTerm,
       order,
-      categories
+      categories,
+      filteredIdxDict
     });
 
     Layers.push(rowLabels)
@@ -356,7 +358,8 @@ export const getLayers = ({
           -yPosition,
           colLabelsWidth,
           debug,
-          "col"
+          "col",
+          filteredIdxDict
         );
         
         Layers.push(catLayer);
@@ -395,7 +398,8 @@ export const getLayers = ({
         -xPosition,  // This becomes the xOffset parameter
         rowLabelsWidth,
         debug,
-        "row"
+        "row",
+        filteredIdxDict
       );
       
       Layers.push(catLayer);
@@ -422,16 +426,25 @@ export const getLayers = ({
     // }
 
   if(order.row === 'cluster'){
-  const clusterRowLayer = getClusterLayer(dataState,heatmapState,onClick?.heatmapCell,'row',order,rowSliderVal,rowLabelsWidth);
+  const clusterRowLayer = getClusterLayer(dataState,heatmapState,onClick?.heatmapCell,'row',order,rowSliderVal,rowLabelsWidth,filteredIdxDict);
   Layers.push(clusterRowLayer)
   }
 
   if(order.col === 'cluster'){
-  const clusterColLayer = getClusterLayer(dataState,heatmapState,onClick?.heatmapCell,'col',order,colSliderVal,colLabelsWidth);
+  const clusterColLayer = getClusterLayer(dataState,heatmapState,onClick?.heatmapCell,'col',order,colSliderVal,colLabelsWidth,filteredIdxDict);
   Layers.push(clusterColLayer)
   }
-    //Add viewport border for debugging
-  // const rowViewportBorderLayer = getViewBorderLayer(heatmapState,rowLabelsWidth,"row");
+  
+  // ********** viewport debug layers ********** //
+  // const viewportDebugLayers = getViewportDebugLayer(
+  //   heatmapState,
+  //   viewStates[IDS.VIEWS.HEATMAP_GRID],
+  //   true  // Set to false to hide the debug layer
+  // );
+  // if (viewportDebugLayers) {
+  //   Layers.push(...viewportDebugLayers); // Spread the array of layers
+  // }
+    // const rowViewportBorderLayer = getViewBorderLayer(heatmapState,rowLabelsWidth,"row");
   // const colViewportBorderLayer = getViewBorderLayer(heatmapState,colLabelsWidth,"col");
 
   // Layers.push(rowViewportBorderLayer);

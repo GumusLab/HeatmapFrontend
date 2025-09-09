@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import HeatmapWrapper from "../../HeatmapWrapper"; // Adjust path as needed
 import { Box, Button, Typography, CircularProgress } from "@mui/material";
 import "./HeatmapPage.css"; // Create this file for styling
+import {cleanupSession} from "../../backendApi/heatmapData"
 
 function HeatmapPage() {
   const [searchParams] = useSearchParams();
@@ -11,6 +12,17 @@ function HeatmapPage() {
   const [fileId, setFileId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [isFileProcessed, setIsFileProcessed] = useState(false);
+
+  useEffect(() => {
+    console.log("🔥 HeatmapWrapper Mounted");
+  
+    return () => {
+      console.log("🗑️ HeatmapWrapper Unmounted");
+    };
+  }, []);
+  
 
   useEffect(() => {
     // Get the file key from URL
@@ -75,20 +87,39 @@ function HeatmapPage() {
           justifyContent: "space-between",
           alignItems: "center",
           padding: "16px",
-          borderBottom: "1px solid #E0E0E0",
+          borderBottom: "5px solid #1E90FF",
           backgroundColor: "#f8f8f8",
         }}
       >
         <Typography variant="h6">
-          <strong>Heatmap Visualization: {fileId || "Loading..."}</strong>
+          <strong style={{color:"#1E90FF"}}>Filename: {fileId || "Loading..."}</strong>
         </Typography>
         <Button 
-          variant="outlined" 
-          onClick={() => window.close()}
-          sx={{ minWidth: '100px' }}
-        >
-          Close
-        </Button>
+        variant="outlined" 
+        onClick={() => {
+          if (sessionId) {
+            // ✅ Call your backend cleanup API
+            cleanupSession(sessionId).finally(() => {
+              window.close(); // ✅ Close after cleanup (regardless of success or failure)
+            });
+          } else {
+            window.close(); // ✅ If no session, just close
+          }
+        }}
+        sx={{ 
+          minWidth: '100px',
+          color: '#1E90FF',
+          borderColor: '#1E90FF',
+          fontWeight: 'bold',
+          '&:hover': {
+            backgroundColor: 'rgba(30, 144, 255, 0.08)',
+            borderColor: 'red',
+          }
+        }}
+      >
+        Close
+      </Button>
+
       </Box>
 
       {loading ? (
@@ -135,17 +166,23 @@ function HeatmapPage() {
           sx={{
             height: "calc(100vh - 70px)",
             width: "100%",
-            overflow: "hidden",
+            overflow: "scroll",
             position: "relative",
-            border:"5px solid black"
+            display: "flex",              // ✅ Add this
+            flexDirection: "column"       // ✅ Add this
+            // border:"5px solid black"
           }}
         >
-          {/* Pass the File object directly to HeatmapWrapper */}
-          <HeatmapWrapper
-            data={fileData}
-            id={fileId}
-            fileSelectedFlag={true}
-          />
+            <HeatmapWrapper
+              data={fileData}
+              id={fileId}
+              fileSelectedFlag={!isFileProcessed}  // Only trigger processing if not yet processed
+              homepage={false}
+              onSessionReady={(sessionId) => {
+                setSessionId(sessionId);
+                setIsFileProcessed(true);  // Mark file as processed to avoid remounts
+              }}
+            />
         </Box>
       )}
     </div>

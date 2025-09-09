@@ -1,25 +1,26 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "ClusterChirp",
+  "name": "ClusterChirp - GPU-Accelerated Omics Data Visualization",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "clusterchirp-logo.png",
       "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "type": "image/png"
     },
     {
-      "src": "logo192.png",
+      "src": "clusterchirp-logo.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "clusterchirp-logo.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#8e44ad",
+  "background_color": "#ffffff",
+  "description": "Interactive exploration of high-dimensional omics data with AI-supported clustering and heatmap visualization"
 }

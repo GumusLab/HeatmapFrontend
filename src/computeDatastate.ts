@@ -1,13 +1,110 @@
 // data-worker.ts (or a separate file you import into your worker)
-import { transformClustergrammerData } from './state/helpers/transformClustergrammerData';
-import { DataStateShape } from './types';
+// import { transformClustergrammerData } from './state/helpers/transformClustergrammerData';
 
-/**
- * Calculate the variance of an array of numbers.
- */
-function calculateVariance(data: number[]): number {
-  const mean = data.reduce((a, b) => a + b, 0) / data.length;
-  return data.reduce((a, b) => a + (b - mean) ** 2, 0) / data.length;
+
+import { DataStateShape } from './types';
+// Helper function to clean label names
+function cleanLabelName(name: string) {
+  return name;
+  // return name.replace(/(.*:)/, '').trim();
+}
+
+// Apply regular sorting to row and column indices
+function applyRegularSorting(
+  rowIndices: number[],
+  colIndices: number[],
+  order: any,
+  jsonData: any,
+  rowNodeMap: Map<string, any>,
+  colNodeMap: Map<string, any>
+) {
+  // Row sorting
+  switch (order.row) {
+    case 'sum':
+      rowIndices.sort((a, b) => {
+        const sumA = colIndices.reduce((acc, colIdx) => acc + (jsonData.mat[a][colIdx] || 0), 0);
+        const sumB = colIndices.reduce((acc, colIdx) => acc + (jsonData.mat[b][colIdx] || 0), 0);
+        return sumB - sumA;
+      });
+      break;
+    case 'alphabetically':
+      rowIndices.sort((a, b) => cleanLabelName(jsonData.row_nodes[a].name).localeCompare(cleanLabelName(jsonData.row_nodes[b].name)));
+      break;
+    case 'variance':
+      rowIndices.sort((a, b) => {
+        const rowDataA = colIndices.map(colIdx => jsonData.mat[a][colIdx]);
+        const rowDataB = colIndices.map(colIdx => jsonData.mat[b][colIdx]);
+        return calculateVariance(rowDataB) - calculateVariance(rowDataA);
+      });
+      break;
+    case 'cluster':
+      if (jsonData.row_nodes) {
+        rowIndices.sort((a, b) => (jsonData.row_nodes[b]?.clust || 0) - (jsonData.row_nodes[a]?.clust || 0));
+      }
+      break;
+  }
+
+  // Column sorting
+  switch (order.col) {
+    case 'sum':
+      colIndices.sort((a, b) => {
+        const sumA = rowIndices.reduce((acc, rowIdx) => acc + (jsonData.mat[rowIdx][a] || 0), 0);
+        const sumB = rowIndices.reduce((acc, rowIdx) => acc + (jsonData.mat[rowIdx][b] || 0), 0);
+        return sumB - sumA;
+      });
+      break;
+    case 'alphabetically':
+      colIndices.sort((a, b) => cleanLabelName(jsonData.col_nodes[a].name).localeCompare(cleanLabelName(jsonData.col_nodes[b].name)));
+      break;
+    case 'variance':
+      colIndices.sort((a, b) => {
+        const colDataA = rowIndices.map(rowIdx => jsonData.mat[rowIdx][a]);
+        const colDataB = rowIndices.map(rowIdx => jsonData.mat[rowIdx][b]);
+        return calculateVariance(colDataB) - calculateVariance(colDataA);
+      });
+      break;
+    case 'cluster':
+      if (jsonData.col_nodes) {
+        colIndices.sort((a, b) => (jsonData.col_nodes[b]?.clust || 0) - (jsonData.col_nodes[a]?.clust || 0));
+      }
+      break;
+  }
+}
+
+// Apply category-based sorting to row and column indices
+function applyCategorySorting(
+  rowIndices: number[],
+  colIndices: number[],
+  order: any,
+  jsonData: any,
+  categories: any
+) {
+  // Column category sorting
+  if (order.sortByColCat.trim().length > 0) {
+    const indexName = categories.col[order.sortByColCat];
+    let indexStringArray = indexName.split("-");
+    indexStringArray.push('index');
+    let idxString = indexStringArray.join("_");
+    
+    colIndices.sort((a, b) => (jsonData.col_nodes[a][idxString] || 0) - (jsonData.col_nodes[b][idxString] || 0));
+  }
+  
+  // Row category sorting
+  if (order.sortByRowCat.trim().length > 0) {
+    const indexName = categories.row[order.sortByRowCat];
+    rowIndices.sort((a, b) => (jsonData.row_nodes[a][indexName] || 0) - (jsonData.row_nodes[b][indexName] || 0));
+  }
+}
+
+
+function calculateVariance(data: (number | null)[]): number {
+  // Filter out null/undefined values and treat them as numbers
+  const validData = data.filter(d => d !== null) as number[];
+  if (validData.length === 0) {
+    return 0; // Or handle as you see fit
+  }
+  const mean = validData.reduce((a, b) => a + b, 0) / validData.length;
+  return validData.reduce((a, b) => a + (b - mean) ** 2, 0) / validData.length;
 }
 
 /**
@@ -57,9 +154,14 @@ function sortData(
   // Row sorting
   switch (order.row) {
     case 'sum':
+      // sortedRows.sort((a, b) => {
+      //   const sumA = Object.values(data[a]).reduce((acc, val) => acc + val, 0);
+      //   const sumB = Object.values(data[b]).reduce((acc, val) => acc + val, 0);
+      //   return sumB - sumA;
+      // });
       sortedRows.sort((a, b) => {
-        const sumA = Object.values(data[a]).reduce((acc, val) => acc + val, 0);
-        const sumB = Object.values(data[b]).reduce((acc, val) => acc + val, 0);
+        const sumA = Object.values(data[a]).reduce((acc, val) => acc + (val || 0), 0);
+        const sumB = Object.values(data[b]).reduce((acc, val) => acc + (val || 0), 0);
         return sumB - sumA;
       });
       break;
@@ -80,10 +182,11 @@ function sortData(
   switch (order.col) {
     case 'sum':
       sortedCols.sort((a, b) => {
-        const sumA = sortedRows.reduce((acc, row) => acc + data[row][a], 0);
-        const sumB = sortedRows.reduce((acc, row) => acc + data[row][b], 0);
+        const sumA = sortedRows.reduce((acc, row) => acc + (data[row][a] || 0), 0);
+        const sumB = sortedRows.reduce((acc, row) => acc + (data[row][b] || 0), 0);
         return sumB - sumA;
       });
+
       break;
     case 'alphabetically':
       sortedCols.sort();
@@ -193,12 +296,12 @@ function sortData(
  * Pure function that computes the data state from the given JSON data,
  * order, and categories.
  */
-interface filteredIdxDict {
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-}
+// interface filteredIdxDict {
+//   startX: number;
+//   startY: number;
+//   endX: number;
+//   endY: number;
+// }
 export function computeDataState(
   jsonData: any,
   order: {
@@ -210,7 +313,7 @@ export function computeDataState(
     sortByColCat: string;
   },
   categories: { row: { [key: string]: string }; col: { [key: string]: string } },
-  filteredIdxDict:filteredIdxDict|null
+  // filteredIdxDict:filteredIdxDict|null
 ): DataStateShape | null {
   if (!jsonData || !jsonData.mat || !jsonData.mat.length) return null;
 
@@ -229,43 +332,93 @@ export function computeDataState(
   }
 
   // Transform the data using your helper function
-  let transformedData = transformClustergrammerData(jsonData,filteredIdxDict);
+  // let transformedData = transformClustergrammerData(jsonData);
+  let transformedData = null;
+
+  // Create arrays of row and column indices instead of nested objects
+  const numRows = jsonData.row_nodes.length;
+  const numColumns = jsonData.col_nodes.length;
+  let rowIndices = Array.from({ length: numRows }, (_, i) => i);
+  let colIndices = Array.from({ length: numColumns }, (_, i) => i);
+
+  
+
 
   // Sort the data based on the provided order and node maps
   // transformedData = sortData(transformedData, order, jsonData, rowNodeMap, colNodeMap);
 
   // Check if we need category-based sorting
+// const needsCategorySorting = order.sortByRowCat.trim().length > 0 || order.sortByColCat.trim().length > 0;
+
+// if (needsCategorySorting) {
+//   // Apply category-based sorting directly
+//   transformedData = sortByCat(transformedData, order, jsonData, categories);
+// } else {
+//   // Apply regular sorting if no category sorting is needed
+//   transformedData = sortData(transformedData, order, jsonData, rowNodeMap, colNodeMap);
+// }
+
+
+// Apply sorting to indices instead of creating nested objects
 const needsCategorySorting = order.sortByRowCat.trim().length > 0 || order.sortByColCat.trim().length > 0;
 
 if (needsCategorySorting) {
-  // Apply category-based sorting directly
-  transformedData = sortByCat(transformedData, order, jsonData, categories);
+  // Apply category-based sorting to indices
+  applyCategorySorting(rowIndices, colIndices, order, jsonData, categories);
 } else {
-  // Apply regular sorting if no category sorting is needed
-  transformedData = sortData(transformedData, order, jsonData, rowNodeMap, colNodeMap);
+  // Apply regular sorting to indices
+  applyRegularSorting(rowIndices, colIndices, order, jsonData, rowNodeMap, colNodeMap);
 }
 
   // Extract rows and columns, and compute dimensions
-  const rows = Object.keys(transformedData);
-  const columns = Object.keys(transformedData[rows[0]]);
-  const numRows = rows.length;
-  const numColumns = columns.length;
+  // const rows = Object.keys(transformedData);
+  // const columns = Object.keys(transformedData[rows[0]]);
+  // const numRows = rows.length;
+  // const numColumns = columns.length;
 
   // Build the Float32Array for heatmap values and compute min/max
   const values = new Float32Array(numRows * numColumns);
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
 
-  rows.forEach((row, rowIndex) => {
-    columns.forEach((col, colIndex) => {
-      let val = transformedData[row][col];
-      val = parseFloat(val.toFixed(2));
 
-      values[rowIndex * numColumns + colIndex] = val;
+  // rows.forEach((row, rowIndex) => {
+  //   columns.forEach((col, colIndex) => {
+  //     const rawVal = transformedData[row][col];
+  //     // If rawVal is null, it becomes NaN. Otherwise, it's a number.
+  //     const val = rawVal === null ? NaN : parseFloat(rawVal.toFixed(2));
+  
+  //     values[rowIndex * numColumns + colIndex] = val;
+  
+  //     // Only update min/max if the value is a valid number
+  //     if (!isNaN(val)) {
+  //       if (val < min) min = val;
+  //       if (val > max) max = val;
+  //     }
+  //   });
+  // });
+
+  // Build Float32Array directly from sorted indices - NO INTERMEDIATE OBJECT!
+let index = 0;
+for (let r = 0; r < numRows; r++) {
+  for (let c = 0; c < numColumns; c++) {
+    const rowIdx = rowIndices[r];
+    const colIdx = colIndices[c];
+    const rawVal = jsonData.mat[rowIdx][colIdx];
+    
+    // If rawVal is null, it becomes NaN. Otherwise, it's a number.
+    const val = rawVal === null ? NaN : parseFloat(rawVal.toFixed(2));
+
+    values[index] = val;
+    index++;
+
+    // Only update min/max if the value is a valid number
+    if (!isNaN(val)) {
       if (val < min) min = val;
       if (val > max) max = val;
-    });
-  });
+    }
+  }
+}
 
   // Retrieve category arrays for row and column labels
   const colCategory = order.colCat || [];
@@ -275,8 +428,12 @@ if (needsCategorySorting) {
   const hasCimacPartId = Object.keys(categories.col).includes('PatientId');
 
   // Build the column labels array
-  const colLabels = columns.map((v, i) => {
-    const colNode = jsonData.col_nodes.find((d: any) => d.name === v);
+  // const colLabels = columns.map((v, i) => {
+  //   const colNode = jsonData.col_nodes.find((d: any) => d.name === v);
+  // Build the column labels array using sorted indices
+const colLabels = colIndices.map((colIdx, i) => {
+  const colNode = jsonData.col_nodes[colIdx];
+  const v = cleanLabelName(colNode.name);
     return {
       text: v,
       position: i,
@@ -294,8 +451,12 @@ if (needsCategorySorting) {
   });
 
   // Build the row labels array
-  const rowLabels = rows.map((v, i) => {
-    const rowNode = jsonData.row_nodes.find((d: any) => d.name === v);
+  // const rowLabels = rows.map((v, i) => {
+  //   const rowNode = jsonData.row_nodes.find((d: any) => d.name === v);
+  // Build the row labels array using sorted indices
+const rowLabels = rowIndices.map((rowIdx, i) => {
+  const rowNode = jsonData.row_nodes[rowIdx];
+  const v = cleanLabelName(rowNode.name);
     return {
       text: v,
       position: i,

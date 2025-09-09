@@ -120,7 +120,6 @@ export const useLabelState = (
 ): void => {
   const canvas = container?.querySelector('canvas');
 
-  console.log(heatmapstateVersion)
 
   useEffect(() => {
     let col = 0;

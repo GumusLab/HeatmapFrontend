@@ -83,6 +83,9 @@ export const  generateTooltipContent: getTooltipType = (info)=>{
         return null;
     }
     const { object, layer } = info;
+
+    console.log('********* object is as follows *********',object)
+
     if (!object || !layer) {
         // Handle the case when the desired information is not available
         return null; // or return a default tooltip content
@@ -91,7 +94,6 @@ export const  generateTooltipContent: getTooltipType = (info)=>{
 
         if(layer.id === 'col-clusters'){
 
-            console.log('object is as follows ******',object)
             const keys = Object.keys(object.category);
             if(keys.length > 0){
             const tableRows = generateTableRows(keys, object);
@@ -229,7 +231,8 @@ export const  generateTooltipContent: getTooltipType = (info)=>{
       }
   }
 }
-    else if(layer.id === IDS.LAYERS.HEATMAP_GRID){
+    else if(layer.id === "heatmap-grid-layer-detailed" || layer.id === "heatmap-grid-layer-aggregated" ){
+
             const X = info.x;
             const Y = info.y;
             const rowLabelsWidth = info.viewport?.x;
@@ -252,40 +255,90 @@ export const  generateTooltipContent: getTooltipType = (info)=>{
                 translateY = -80;
               }
             }
-            if(object.colCategory){
-              HTML = `Row: ${object.row}<br/>Column: ${object.col}<br/>
-              ${Object.entries(object.colCategory).map(([key,value])=> `${key}:${(value as string).split(':')[1]}`).join('<br/>')}
-              <br/>Value: ${object.value}`
-            }
-            else{
-              HTML = `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${object.value}`
-            }
-            return {
-              // html: `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${object.value}`,
-              html:`${HTML}`,
-              style:{
-                backgroundColor:'white',
-                color:'black',
-                padding:'0px',
-                width:'180px',
-                // height:'60px',
-                textAlign: 'left',
-                fontFamily:'Arial, sans-serif',
-                fontSize:'13px',
-                top:`${translateY}px`,
-                left:`${translateX}px`,
-                position:'absolute',
-                zIndex:'1',
+              // <div style="margin-top: 5px;">
+                    //   <strong>Sample Rows:</strong><br>
+                    //   ${object.sampleRows.map((label:any) => `&nbsp;&nbsp;- ${label}<br>`).join('')}
+                    // </div>
+                    // <div style="margin-top: 5px;">
+                    //   <strong>Sample Columns:</strong><br>
+                    //   ${object.sampleCols.map((label:any) => `&nbsp;&nbsp;- ${label}<br>`).join('')}
+                    // </div>
+
+
+            if (!object.aggregated){
+              if(object.colCategory){
+                HTML = `Row: ${object.row}<br/>Column: ${object.col}<br/>
+                ${Object.entries(object.colCategory).map(([key,value])=> `${key}:${(value as string).split(':')[1]}`).join('<br/>')}
+                <br/>Value: ${object.value}`
+              }
+              else{
+                HTML = `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${object.value}`
+              }
+              return {
+                // html: `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${object.value}`,
+                html:`${HTML}`,
+                style:{
+                  backgroundColor:'white',
+                  color:'black',
+                  padding:'0px',
+                  width:'180px',
+                  // height:'60px',
+                  textAlign: 'left',
+                  fontFamily:'Arial, sans-serif',
+                  fontSize:'13px',
+                  top:`${translateY}px`,
+                  left:`${translateX}px`,
+                  position:'absolute',
+                  zIndex:'1',
+                }
               }
             }
+            else{
+              // Tooltip for an AGGREGATED cell
+                  HTML = `
+                  <div style="text-align: left; font-family: sans-serif; font-size: 13px; padding: 4px;">
+                    <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px;">Aggregated Cell</div>
+                    <div><strong>Avg. Value:</strong> ${object.value}</div>
+                    <div style="margin-top: 5px;">
+                      <strong>Contains:</strong><br>
+                      &nbsp;&nbsp;${object.rowCount} rows<br>
+                      &nbsp;&nbsp;${object.colCount} columns<br>
+                      &nbsp;&nbsp;(${object.cellCount} total cells)
+                    </div>
+                  </div>
+                `;
+              return {
+                // html: `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${object.value}`,
+                html:`${HTML}`,
+                style:{
+                  backgroundColor:'white',
+                  color:'black',
+                  padding:'0px',
+                  width:'180px',
+                  // height:'60px',
+                  textAlign: 'left',
+                  fontFamily:'Arial, sans-serif',
+                  fontSize:'13px',
+                  top:`${translateY}px`,
+                  left:`${translateX}px`,
+                  position:'absolute',
+                  zIndex:'1',
+                }
+              }
+            }
+           
         }
         else if(layer.id === IDS.LAYERS.ROW_LABELS){
           return null     
         }
         else if(layer.id === IDS.LAYERS.COL_LABELS){
+          console.log('********* object is as follows *********',object)
+
           return null     
         }
         else{
+
+          console.log('********* object is as follows *********',object)
 
           if('visibility' in object){
             if(!object.visibility){

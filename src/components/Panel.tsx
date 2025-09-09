@@ -11,6 +11,8 @@ import Drawer from '@mui/material/Drawer';
 import IconButton from '@mui/material/IconButton';
 import { styled, useTheme } from '@mui/material/styles';
 import React, { useEffect, useMemo, useState } from 'react';
+import FiltersSection from './Filters';
+
 import type {
   DataStateShape
 } from '../types';
@@ -21,7 +23,8 @@ import SearchBox from './SearchBox';
 import SimpleSelection from './SimpleSelection';
 import MultipurposeSlider from './opcatiySlider';
 import ReplayIcon from '@mui/icons-material/Replay';
-
+import MapIcon from '@mui/icons-material/Map'; // If you want to add a toggle button
+import { ORDER_INDEX } from '../const';
 const orderArray = ['alphabetically','cluster','sum','variance']
 // interface order{
 //     row:string;
@@ -57,7 +60,14 @@ export default function PersistentDrawerLeft({
   downloadMatrix,
   setCropping,
   setFilteredIdxDict,
-  cropBox
+  cropBox,
+  isMinimapEnabled,
+  setIsMinimapEnabled,
+  filters,
+  setFilters,
+  onRenderHeatmap,
+  notifyClusteringStarted,
+  notifySortStarted
 }: {
   parentContainerRef: HTMLDivElement;
   setIsDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -79,12 +89,21 @@ export default function PersistentDrawerLeft({
   setCropping: any;
   setFilteredIdxDict:any;
   cropBox:CropBox|null;
-
+  isMinimapEnabled:boolean;
+  setIsMinimapEnabled:React.Dispatch<React.SetStateAction<boolean>>;
+  filters: {row: any[], col: any[]};
+  setFilters: React.Dispatch<React.SetStateAction<{row: any[], col: any[]}>>;
+  onRenderHeatmap: (currentFilters: any) => void; // ✅ Requires filters parameter
+  notifyClusteringStarted:any;
+  notifySortStarted:any;
 }) {
   const [isDrawerOpen, setDrawerOpen] = useState(true);
   const theme = useTheme();
-  const [selectedRowIndex, setSelectedRowIndex] = useState(0);
-  const [selectedColIndex, setSelectedColIndex] = useState(0);
+  // const [selectedRowIndex, setSelectedRowIndex] = useState(0)
+  const [selectedRowIndex, setSelectedRowIndex] = useState(ORDER_INDEX[order["row"]]);
+  const [selectedColIndex, setSelectedColIndex] = useState(ORDER_INDEX[order["col"]]);
+
+
 
   const rowlabels = useMemo(
     () => {
@@ -101,15 +120,41 @@ export default function PersistentDrawerLeft({
   const rowCategorynames = Object.keys(categories.row);
 
 
+  // const handleRowItemClick = (index: number) => {
+  //   console.log('rowitemclick')
+  //   setSelectedRowIndex(index);
+  //   setOrder((prevOrder:any) => ({ ...prevOrder, row: orderArray[index], sortByRowCat:""}));
+  // };
+
+  // const handleColItemClick = (index: number) => {
+  //   setSelectedColIndex(index);
+  //   setOrder((prevOrder:any) => ({ ...prevOrder, col: orderArray[index], sortByColCat:""}));
+  // };
   const handleRowItemClick = (index: number) => {
-    console.log('rowitemclick')
+    const actionType = orderArray[index];
+    if (actionType === 'cluster') {
+      notifyClusteringStarted();
+    } else {
+      notifySortStarted(actionType, 'rows');
+    }
+    
+    // 2. ✅ Then, set the order to begin the work (your existing logic)
     setSelectedRowIndex(index);
-    setOrder((prevOrder:any) => ({ ...prevOrder, row: orderArray[index], sortByRowCat:""}));
+    setOrder((prevOrder:any) => ({ ...prevOrder, row: actionType, sortByRowCat:""}));
   };
 
   const handleColItemClick = (index: number) => {
+    const actionType = orderArray[index];
+
+    if (actionType === 'cluster') {
+      notifyClusteringStarted();
+    } else {
+      notifySortStarted(actionType, 'columns');
+    }
+
+    // 2. ✅ Then, set the order to begin the work (your existing logic)
     setSelectedColIndex(index);
-    setOrder((prevOrder:any) => ({ ...prevOrder, col: orderArray[index], sortByColCat:""}));
+    setOrder((prevOrder:any) => ({ ...prevOrder, col: actionType, sortByColCat:""}));
   };
 
   useEffect(() => {
@@ -208,8 +253,8 @@ export default function PersistentDrawerLeft({
           ],
         },
       }}>
-        <IconButton>
-            <DownloadIcon onClick={downloadMatrix} />
+        <IconButton onClick={downloadMatrix}>
+            <DownloadIcon />
           </IconButton>
 
       </Tooltip>
@@ -238,6 +283,26 @@ export default function PersistentDrawerLeft({
 
       </Tooltip>
       }
+       {/* ✅ NEW: Toggle Minimap Button */}
+  <Tooltip
+    title="Toggle Minimap"
+    slotProps={{
+      popper: {
+        modifiers: [
+          {
+            name: 'offset',
+            options: {
+              offset: [0, -14],
+            },
+          },
+        ],
+      },
+    }}
+  >
+    <IconButton onClick={() => setIsMinimapEnabled(!isMinimapEnabled)}>
+      <MapIcon color={isMinimapEnabled ? "primary" : "action"} />
+    </IconButton>
+  </Tooltip>
 
           <IconButton onClick={handleDrawerClose}>
             {theme.direction === 'ltr' ? <ChevronLeftIcon /> : <ChevronRightIcon />}
@@ -248,13 +313,13 @@ export default function PersistentDrawerLeft({
           <h3 style={{ margin: '0', padding:'0',fontSize: '14px', fontWeight: 'normal', fontFamily: 'Arial, sans-serif' }}>
             Row Order
           </h3>
-          <ListComponent selectedIndex={selectedRowIndex} handleItemClick={handleRowItemClick}/>
+          <ListComponent selectedIndex={ORDER_INDEX[order["row"]]} handleItemClick={handleRowItemClick}/>
         </div>
         <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'10px',display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
           <h3 style={{ margin: '0',padding:'0', fontSize: '14px', fontWeight: 'normal', fontFamily: 'Arial, sans-serif' }}>
             Col Order 
           </h3>
-          <ListComponent selectedIndex={selectedColIndex} handleItemClick={handleColItemClick}/>
+          <ListComponent selectedIndex={ORDER_INDEX[order["col"]]} handleItemClick={handleColItemClick}/>
         </div>
         {rowlabels && <SearchBox elements={rowlabels} setSearchTerm={setSearchTerm}/>}
         <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'10px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'}}>
@@ -285,8 +350,16 @@ export default function PersistentDrawerLeft({
         <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'0px',display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'}}>
         {Legend}
         </div>
+
+         {/* 🆕 ADD FILTERS SECTION HERE */}
+         <FiltersSection 
+          filters={filters}
+          setFilters={setFilters}
+          onRenderHeatmap={onRenderHeatmap}
+        />
+
         {colCategorynames.length>0 &&
-        <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'50px',display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'}}>
+        <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'30px',display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'}}>
         <MultiSelect elements={colCategorynames} order={order} setOrder={setOrder} axis='col'/>
         </div>}
 

@@ -17,6 +17,12 @@ export const HEATMAP_PARENT_WIDTH_RATIO = 100;
 export const HEATMAP_HEIGHT = 100;
 export const HEATMAP_WIDTH = 97;
 export const DEFAULT_LABEL_GAP = 2;
+export const ORDER_INDEX:any = {
+  "alphabetically":0,
+  "cluster":1,
+  "sum":2,
+  "variance":3
+}
 
 
 

@@ -48,9 +48,10 @@
 
 .giflogo {
     position: absolute;
-    top: -35px;
-    left: 185px;
-    width: 200px; /* Small size */
+    /* top: -35px; */
+    top:-20px;
+    left: 210px;
+    width: 125px; /* Small size */
     height: auto; /* Maintain aspect ratio */
     mix-blend-mode: multiply; /* Try multiply, overlay, or screen */
     z-index: 4000;
@@ -58,8 +59,8 @@
 
 .circleText {
     position: absolute;
-    top: 20px;
-    left: 225px;
+    top: 25px;
+    left: 300px;
     height: auto; /* Maintain aspect ratio */
     z-index: 4000;
 }
@@ -86,7 +87,7 @@
     flex:1;
     height: 90vh;
     gap: "0px";
-    margin-top:0px;
+    margin-top:70px;
     /* border: 1px solid black; */
 }
 

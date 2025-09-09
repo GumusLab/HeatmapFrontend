@@ -126,6 +126,24 @@ export interface DeckGLHeatmapProps {
   /* Prop for setting the heatmap pannel width */
   panelWidth:number;
 
+  /* Prop for current user session id */
+  sessionID:string;
+
+  onShowNetwork?:any; // ✅ Required nodes parameter
+  
+  onShowPathwayNetwork?:any;
+
+  notifyClusteringStarted: () => void;
+  notifyClusteringSuccess: () => void;
+
+  notifySortStarted: (sortType, dimension) => void;
+  notifySortSuccess: (sortType, dimension) => void;
+
+  showLoading:any;
+  hideLoading:any;
+  addNotification:any;
+
+
   /*P vlaue json for results files */
   pvalData?:Record<string, Record<string, number>>;
 

@@ -13,6 +13,7 @@ function Contact() {
                     alignItems: "flex-start",
                     padding: "20px",
                     flexWrap: "nowrap", // Prevent wrapping
+                    marginTop: "70px"
                 }}
             >
                 {/* Map Section */}

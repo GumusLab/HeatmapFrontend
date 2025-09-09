@@ -1,197 +1,18 @@
-
-// import * as React from 'react';
-// import { useEffect, useState } from "react";
-// import 'react-app-polyfill/ie11';
-// import { DeckGLHeatmap } from './DeckGLHeatmap';
-// import './wrapper.css';
-// import { CircularProgress } from '@mui/material';
-// import {processHeatmapData} from "./backendApi/heatmapData"
-// import d from './data/cytof_data_patient.json';
-
-// type CategoryType = {
-//   row: Record<string, any>;
-//   col: Record<string, any>;
-// };
-
-// interface HeatmapWrapperProps {
-//   data: any;
-//   id: string;
-//   fileSelectedFlag: boolean;
-//   cat?: CategoryType;
-// }
-
-// const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({ data, id,fileSelectedFlag, cat = { row: {}, col: {} } }) => {
-//   const containerRef = React.useRef<HTMLDivElement | null>(null);
-//   // const [test, setTest] = useState<HTMLDivElement | null>(null);
-//   const [categories, setCategories] = useState(cat);
-//   const [resultValueType,setResultValueType] = useState("logFC")
-//   const [resultCat,setResultCat] = useState("Timepoints");
-//   const [valScale, setValScale] = useState(id === 'olinkPatientHeatmap' || id === 'cytofPatientHeatmap' || id === 'serologyPatientHeatmap' ? 'Zscore' : 'None');
-//   const [isContainerReady, setIsContainerReady] = useState(false); // Track if the container ref is ready
-//   const [Heatmapdata, setHeatmapdata] = useState(null)
-
-
-
-//   console.log('******** Heatmap data is ',Heatmapdata)
-//   console.log('******* id is as follows ******', id)
-//   useEffect(()=>{
-
-//     if(fileSelectedFlag){
-//       processHeatmapData(data).then((response)=>{
-//         if (response.cat_colors) {
-//           const rowCats: Record<string, string> = {};
-//           const colCats: Record<string, string> = {};
-      
-//           if (Object.keys(response.cat_colors.row).length > 0) {
-//             for (const key of Object.keys(response.cat_colors.row)) {
-//               const catName = Object.keys(response.cat_colors.row[key])[0].split(":")[0].trim();
-//               rowCats[catName] = key;
-//             }
-//           }
-//           if (Object.keys(response.cat_colors.col).length > 0) {
-//             for (const key of Object.keys(response.cat_colors.col)) {
-//               const catName = Object.keys(response.cat_colors.col[key])[0].split(":")[0].trim();
-//               colCats[catName] = key;
-//             }
-//           }
-      
-//           setCategories({ row: rowCats, col: colCats });
-//           // setIsCategoriesReady(true);
-//           // Flag = false
-//         } else {
-//           if (Object.keys(categories.row).length > 0 || Object.keys(categories.col).length > 0) {
-//             setCategories({ row: {}, col: {} });
-//           }
-//         //   setIsCategoriesReady(true);
-//         //  Flag = false
-//         }
-
-//         // ✅ Add file_name to response
-//       const updatedResponse = {
-//         ...response,
-//         file_name: id  // Using 'data.name' if available
-//       };
-
-//       setHeatmapdata(updatedResponse);
-//       // setHeatmapdata(response)
-//       })
-//     }
-//     else{
-//       if (data.cat_colors) {
-//         const rowCats: Record<string, string> = {};
-//         const colCats: Record<string, string> = {};
-    
-//         if (Object.keys(data.cat_colors.row).length > 0) {
-//           for (const key of Object.keys(data.cat_colors.row)) {
-//             const catName = Object.keys(data.cat_colors.row[key])[0].split(":")[0].trim();
-//             rowCats[catName] = key;
-//           }
-//         }
-//         if (Object.keys(data.cat_colors.col).length > 0) {
-//           for (const key of Object.keys(data.cat_colors.col)) {
-//             const catName = Object.keys(data.cat_colors.col[key])[0].split(":")[0].trim();
-//             colCats[catName] = key;
-//           }
-//         }
-    
-//         setCategories({ row: rowCats, col: colCats });
-//       } else {
-//         if (Object.keys(categories.row).length > 0 || Object.keys(categories.col).length > 0) {
-//           setCategories({ row: {}, col: {} });
-//         }
-//         // setIsCategoriesReady(true);
-//       //  Flag = false
-//       }
-//       setHeatmapdata(data)
-//     }
-//   },[data])
-
-
-//   useEffect(() => {
-//     // Ensure the ref is set after the component is mounted
-//     if (containerRef.current) {
-//       setIsContainerReady(true);
-//     }
-//   }, [containerRef]);
-
-//   // Show CircularProgress until categories are ready
-//  // Show CircularProgress until categories are ready and the container is ready
-//  if (!isContainerReady || !Heatmapdata) {
-//   return (
-//     <div id={id} ref={containerRef} style={{ width: '90%', height: '100%', position: 'relative' }}>
-//       <CircularProgress />
-//     </div>
-//   );
-// }
-
-//   // ✅ Check if fileSelectedFlag is true, file_name matches id, and container is ready
-//   if (fileSelectedFlag &&  Heatmapdata["file_name"] !== id) {
-//     return (
-//       <div id={id} ref={containerRef} style={{ width: '90%', height: '100%', position: 'relative' }}>
-//         <CircularProgress />
-//       </div>
-//     );
-//   }
-
-// return (
-//   <div
-//     id={id}
-//     ref={containerRef}
-//     style={{
-//       width: "100%",
-//       height: "100%", // ✅ Expands to full height
-//       minHeight: "500px", // ✅ Ensures visibility
-//       position: "relative",
-//       display: "flex", // ✅ Allow child elements to expand properly
-//       justifyContent: "center",
-//       alignItems: "center",
-//     }}
-//   >
-//     {containerRef.current ? (
-//       <DeckGLHeatmap
-//         data={Heatmapdata}
-//         dataId={id}
-//         container={containerRef.current}
-//         position="relative"
-//         categories={categories}
-//         // ord={{
-//         //   row: "alphabetically",
-//         //   col: "alphabetically",
-//         //   rowCat: [],
-//         //   sortByRowCat: "",
-//         //   colCat: [],
-//         //   sortByColCat: "",
-//         // }}
-//         setValueScale={['olinkPatientHeatmap', 'cytofPatientHeatmap', 'serologyPatientHeatmap'].includes(id) ? setValScale : setResultValueType}
-//         setResultCategory={setResultCat}
-//         resultCategories={['Timepoints', 'ARMs', 'Response']}
-//         valueScale={valScale}
-//         legend={{ width: 175 - 20, height: 30 }}
-//         labels={{
-//           row: { maxSize: 14, titleSize: 8, maxChars: 30 },
-//           column: { maxSize: 10, titleSize: 8, maxChars: 20, angle: 45 },
-//         }}
-//         valueType={resultValueType}
-//         panelWidth={175}
-//       />
-//     ) : (
-//       <CircularProgress />
-//     )}
-//   </div>
-// );
-
-// };
-
-// export default HeatmapWrapper;
-
-
 import * as React from 'react';
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import 'react-app-polyfill/ie11';
 import { DeckGLHeatmap } from './DeckGLHeatmap';
 import './wrapper.css';
-import { CircularProgress } from '@mui/material';
-import { processHeatmapData } from "./backendApi/heatmapData";
+import { CircularProgress, Typography } from '@mui/material';
+import { getEnrichmentData, processHeatmapData, processWithStrategy,get3DCoords } from "./backendApi/heatmapData";
+import NetworkVisualizationComponent from './components/pages/NetworkVisualizationPage';
+import { useAppNotifications, AppNotificationSystem } from './hooks/useAppNotifications';
+import { useHeatmapEvents } from './hooks/useHeatmapEvents'
+import { useWebGLContextManager } from './components/WebGLContextManager';
+
+import PathwayAnalysisView from './components/pages/PathwayAnalysisView';
+import ImputationStrategySelector from './components/pages/ImputationStrategySelector';
+
 
 type CategoryType = {
   row: Record<string, any>;
@@ -202,108 +23,572 @@ interface HeatmapWrapperProps {
   data: any;
   id: string;
   fileSelectedFlag: boolean;
+  homepage: boolean;
   cat?: CategoryType;
+  onSessionReady?: (sessionId: string) => void;
 }
 
-const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({ data, id, fileSelectedFlag, cat = { row: {}, col: {} } }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const heatmapDataRef = useRef<any>(null); // ✅ Stores large data efficiently
-  const [heatmapVersion, setHeatmapVersion] = useState(0); // ✅ Triggers re-render when data updates
+const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({ 
+  data, 
+  id, 
+  fileSelectedFlag, 
+  homepage,
+  cat = { row: {}, col: {} },
+  onSessionReady 
+}) => {
+ 
+  // --- Hooks and State Management ---
+ const appNotifications = useAppNotifications();
+ const { registerExternalContext, unregisterContext } = useWebGLContextManager();
+ const deckglContextId = useRef<string | null>(null);
+ const {
+   notifyDataLoading,
+   notifyDataSuccess,
+   notifyDataError,
+   notifyClusteringStarted,
+    notifyClusteringSuccess,
+    notifySortStarted,
+    notifySortSuccess
+ } = useHeatmapEvents(appNotifications);
+
+ const {
+  notifications,
+  isLoading,
+  loadingMessage,
+  addNotification,
+  removeNotification,
+  showLoading,
+  hideLoading,
+ } = appNotifications;
+
+  const containerRef = useRef<HTMLDivElement>(null); // Ref for the main container
+  const heatmapDataRef = useRef<any>(null); // Stores large data without causing re-renders
+  const [heatmapVersion, setHeatmapVersion] = useState(0); // Triggers re-render when data updates
   const [categories, setCategories] = useState(cat);
   const [resultValueType, setResultValueType] = useState("logFC");
   const [resultCat, setResultCat] = useState("Timepoints");
   const [valScale, setValScale] = useState(
     ['olinkPatientHeatmap', 'cytofPatientHeatmap', 'serologyPatientHeatmap'].includes(id) ? 'Zscore' : 'None'
   );
-  const [isContainerReady, setIsContainerReady] = useState(false);
+  
+  const hasProcessedRef = useRef(false);
+  const sessionId = useRef("");
 
-  console.log("🔥 Heatmap Rendered with Version:", heatmapVersion);
+  const [showNetwork, setShowNetwork] = useState(false);
+  const [networkData, setnetworkData] = useState<any>({});
+  const [showPathwayView, setShowPathwayView] = useState(false);
+  const [pathwayAnalysisData, setPathwayAnalysisData] = useState<any>(null);
+  const [showStrategySelection, setShowStrategySelection] = useState(false);
+  const [missingValueSummary, setMissingValueSummary] = useState(null);
 
-  useEffect(() => {
-    if (fileSelectedFlag) {
-      console.log("⏳ Processing new heatmap data...");
 
-      processHeatmapData(data).then((response) => {
-        const updatedResponse = {
-          ...response,
-          file_name: id, // ✅ Ensure correct file is processed
-        };
+  // Useref to store the large coordinate data
+  const global3DPositionsRef = useRef<Record<string, { x: number; y: number; z: number }> | null>(null);
+  // Use state to signal when the data in the ref is ready (lightweight re-render trigger)
+  const [isGlobal3DPositionsReady, setIsGlobal3DPositionsReady] = useState(false);
+  const [global3DLoadingStatus, setGlobal3DLoadingStatus] = useState<'idle' | 'pending' | 'computing' | 'ready' | 'failed' | 'disabled'>('idle');
+  const global3DTaskPollingId = useRef<NodeJS.Timeout | null>(null); // For polling cleanup
+  const global3DLoadingNotificationId = useRef<number | null>(null); 
 
-        heatmapDataRef.current = updatedResponse; // ✅ Stores large data
-        setHeatmapVersion((v) => v + 1); // ✅ Triggers re-render
-      }).catch((error) => {
-        console.error("❌ Error processing heatmap data:", error);
-      });
-    } else {
-      heatmapDataRef.current = data;
-      setHeatmapVersion((v) => v + 1); // ✅ Ensure re-render when switching to default data
+
+
+
+  // --- Handlers for Events from DeckGLHeatmap ---
+
+  const handleScrollToAction = (targetSelector: string): void => {
+    const element = document.querySelector(targetSelector);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [fileSelectedFlag, data]);
+  };
+  
+  // const handleShowNetwork = (clusterData: any) => {
+  //   const clusterName = `Cluster ${clusterData.metadata.clusterId || ''}`.trim();
+  //   addNotification({ type: 'info', title: `Preparing Network`, message: `Opening the gene correlation network view for ${clusterName}.`, duration: 3000 });
+  //   const formattedNetworkData = { ...clusterData, clusterName, sessionId: sessionId.current, geneIds: clusterData.geneIds || clusterData.genes || [], filters: clusterData.filters || {} };
+  //   setnetworkData(formattedNetworkData);
+  //   setShowNetwork(true);
+  // };
 
-  useEffect(() => {
-    if (containerRef.current) {
-      setIsContainerReady(true);
+  const handleShowNetwork = (clusterData: any) => {
+    const clusterName = `Cluster ${clusterData.metadata.clusterId || ''}`.trim();
+    addNotification({ type: 'info', title: `Preparing Network`, message: `Opening the gene correlation network view for ${clusterName}.`, duration: 3000 });
+    
+    // ✅ Add small delay to prevent rapid re-renders
+    setTimeout(() => {
+      const formattedNetworkData = { 
+        ...clusterData, 
+        clusterName, 
+        sessionId: sessionId.current, 
+        geneIds: clusterData.geneIds || clusterData.genes || [], 
+        filters: clusterData.filters || {},
+        global3DPositions: global3DPositionsRef.current,
+        isGlobal3DLoading: (global3DLoadingStatus === 'pending' || global3DLoadingStatus === 'computing'),
+        global3DError: global3DLoadingStatus === 'failed' ? "Failed to load 3D layout." : 
+                        global3DLoadingStatus === 'disabled' ? "3D layout generation is disabled on the server." : null
+      };
+      setnetworkData(formattedNetworkData);
+      setShowNetwork(true);
+    }, 100); // Small delay to prevent rapid updates
+  };
+
+  const handleNetworkSuccess = (clusterName: string, nodeCount: number, originalCount?: number) => {
+    hideLoading();
+    let message = `Network with ${nodeCount} nodes created for ${clusterName}. Scroll down to view.`;
+    if (originalCount && originalCount > nodeCount) {
+      message = `Network created for ${clusterName}. Displaying ${nodeCount} of ${originalCount} genes after filtering. Scroll down to view.`;
     }
-  }, []);
+    addNotification({ type: 'success', title: 'Network Ready! 🎉', message, action: 'scrollTo:[data-network-section]', actionText: 'View Network ↓', autoHide: false });
+  };
 
-  // ✅ Show Loader Until:
-  // - `fileSelectedFlag` is true AND 
-  // - Correct file is loaded AND 
-  // - Container is ready
-  if (fileSelectedFlag && (!heatmapDataRef.current || heatmapDataRef.current.file_name !== id || !isContainerReady)) {
-    return (
-      <div id={id} ref={containerRef} style={{ width: '90%', height: '100%', position: 'relative' }}>
-        <CircularProgress />
+  const handleNetworkError = (clusterName: string, errorMsg: string) => {
+    hideLoading();
+    addNotification({ type: 'error', title: 'Network Failed ❌', message: `Could not create network for ${clusterName}: ${errorMsg}` });
+  };
+
+  const handleHideNetwork = () => {
+    setShowNetwork(false);
+    setnetworkData({});
+    
+    // ✅ NEW: Force cleanup of WebGL contexts
+    setTimeout(() => {
+      // Force garbage collection of WebGL contexts
+      if (window.gc) {
+        window.gc();
+      }
+      
+      // Clear any remaining WebGL contexts
+      const canvas = document.querySelector('canvas[data-sigma-container]') as HTMLCanvasElement;
+      if (canvas) {
+        const gl = canvas.getContext('webgl') || canvas.getContext('webgl2');
+        if (gl) {
+          gl.getExtension('WEBGL_lose_context')?.loseContext();
+        }
+      }
+    }, 100);
+  };
+
+  const handleShowPathwayAnalysis = async (clusterData: any) => {
+    const clusterName = `Cluster ${clusterData.metadata.clusterId || ''}`.trim();
+    const genes = clusterData.genes || clusterData.nodes;
+    showLoading(`Running enrichment analysis for ${clusterName}...`);
+    setShowPathwayView(true);
+
+    try {
+      const results = await getEnrichmentData(genes, sessionId.current);
+      setPathwayAnalysisData({ clusterName, enrichmentResults: results });
+      addNotification({ type: 'success', title: 'Analysis Complete!', message: `Enrichment results for ${clusterName} are ready to view.`, action: 'scrollTo:[data-pathway-section]', actionText: 'View Analysis ↓', autoHide: false });
+    } catch (error: any) {
+      addNotification({ type: 'error', title: 'Analysis Failed', message: error.message || `Could not fetch results for ${clusterName}.` });
+      setShowPathwayView(false);
+    } finally {
+      hideLoading();
+    }
+  };
+
+  const handleHidePathwayAnalysis = () => {
+    setShowPathwayView(false);
+    setPathwayAnalysisData(null);
+  };
+
+  const handleStrategySelection = async (strategy: string, parameters: any) => {
+    try {
+      setShowStrategySelection(false);
+      notifyDataLoading();
+      const response = await processWithStrategy(sessionId.current, strategy, parameters);
+      console.log('******** response is as follows ********',response)
+      heatmapDataRef.current = { ...response.heatmap_data, file_name: id };
+      setHeatmapVersion((v) => v + 1);
+      notifyDataSuccess(id);
+    } catch (error: any) {
+      notifyDataError(error.message || 'An unknown error occurred.');
+    }
+  };
+
+  // --- Main Data Processing Effect ---
+  useEffect(() => {
+    if (fileSelectedFlag && data && !hasProcessedRef.current) {
+      hasProcessedRef.current = true;
+      notifyDataLoading();
+      processHeatmapData(data)
+        .then((response) => {
+          const { session_id, has_missing_values,global_3d_positions_status } = response;
+          if (session_id && onSessionReady) {
+            sessionId.current = session_id;
+            onSessionReady(session_id);
+          }
+          if (has_missing_values) {
+            setMissingValueSummary(response.missing_value_summary);
+            setShowStrategySelection(true);
+            notifyDataError('Missing values found');
+          } else {
+            heatmapDataRef.current = { ...response.heatmap_data, file_name: id };
+            setHeatmapVersion((v) => v + 1);
+            notifyDataSuccess(id);
+
+             // --- NEW: Handle 3D global positions async status ---
+             setGlobal3DLoadingStatus(global_3d_positions_status); // Update status state
+             if (global_3d_positions_status === 'pending' || global_3d_positions_status === 'computing') {
+              // const notificationId = addNotification({ type: 'info', title: '3D Layout', message: 'Generating 3D network layout in the background...', autoHide: false });
+              // global3DLoadingNotificationId.current = notificationId; // Store ID in ref
+              startPolling3DCoords(session_id);
+             } else if (global_3d_positions_status === 'ready') {
+               fetch3DCoords(session_id); // Fetch immediately if already ready
+             } else if (global_3d_positions_status === 'failed') {
+              //  addNotification({ type: 'error', title: '3D Layout Failed', message: 'Could not generate global 3D network layout.', duration: 5000 });
+             } else if (global_3d_positions_status === 'disabled') {
+               console.log('ℹ️ 3D coordinate generation is disabled on the server');
+               // No polling or fetching needed - 3D features will be unavailable
+             }
+          }
+        })
+        .catch((error) => {
+          notifyDataError(error.message || 'An unknown error occurred.');
+        });
+    } else if (!fileSelectedFlag && homepage && data) {
+        heatmapDataRef.current = data;
+        sessionId.current = id;
+        setHeatmapVersion((v) => v + 1);
+    }
+  }, [fileSelectedFlag, data, homepage, id]);
+
+  // ✅ NEW: Register DeckGL context once when component mounts
+  useEffect(() => {
+    // Only register if we don't already have a context ID and we have a session ID
+    if (!deckglContextId.current && sessionId.current) {
+      deckglContextId.current = registerExternalContext('heatmap', sessionId.current);
+      console.log('🎮 DeckGL context registered:', deckglContextId.current);
+    }
+    
+    // Cleanup function runs when component unmounts
+    return () => {
+      if (deckglContextId.current) {
+        console.log('🗑️ DeckGL context unregistering:', deckglContextId.current);
+        unregisterContext(deckglContextId.current);
+        deckglContextId.current = null;
+      }
+    };
+  }, [sessionId.current]); // Re-run when sessionId changes
+
+
+    // --- NEW: Polling and Fetching Functions for 3D Coords ---
+    const fetch3DCoords = useCallback(async (currentSessionId: string) => {
+      setGlobal3DLoadingStatus('computing'); // Set status to computing while fetching
+      try {
+        const response = await get3DCoords(currentSessionId); // Use the imported get3DCoords function
+  
+        if (response.status === 'ready') {
+          global3DPositionsRef.current = response.global_3d_positions; // Store in ref
+          setIsGlobal3DPositionsReady(true); // Signal readiness via state
+          setGlobal3DLoadingStatus('ready'); // Update status state
+          // addNotification({ type: 'success', title: '3D Layout Ready! 🎉', message: 'Global 3D network layout is now available.', duration: 3000 });
+          if (global3DTaskPollingId.current) {
+            clearInterval(global3DTaskPollingId.current);
+            global3DTaskPollingId.current = null;
+          }
+          // if (global3DLoadingNotificationId.current !== null) { // Check if it holds an ID
+          //   removeNotification(global3DLoadingNotificationId.current); // Use removeNotification
+          //   global3DLoadingNotificationId.current = null;
+          // }
+  
+        } else if (response.status === 'computing' || response.status === 'pending') {
+          // Still computing, keep polling (no direct action here, polling interval handles it)
+          setGlobal3DLoadingStatus(response.status); // Keep status updated
+          console.log(`3D layout for session ${currentSessionId} is still ${response.status}.`);
+        } else {
+          // Failed or other unexpected status
+          setGlobal3DLoadingStatus('failed'); // Update status state
+          // addNotification({ type: 'error', title: '3D Layout Failed', message: response.message || 'Failed to generate global 3D network layout.', duration: 5000 });
+          // Clear polling interval on failure
+          if (global3DTaskPollingId.current) {
+            clearInterval(global3DTaskPollingId.current);
+            global3DTaskPollingId.current = null;
+          }
+          if (global3DLoadingNotificationId.current !== null) { // Check if it holds an ID
+            removeNotification(global3DLoadingNotificationId.current); // Use removeNotification
+            global3DLoadingNotificationId.current = null;
+          }
+        }
+      } catch (error: any) {
+        setGlobal3DLoadingStatus('failed'); // Update status state
+        // addNotification({ type: 'error', title: '3D Layout Error', message: `Network error fetching 3D layout: ${error.message}`, duration: 5000 });
+        // Clear polling interval on network error
+        if (global3DTaskPollingId.current) {
+          clearInterval(global3DTaskPollingId.current);
+          global3DTaskPollingId.current = null;
+        }
+
+        if (global3DLoadingNotificationId.current !== null) { // Check if it holds an ID
+          removeNotification(global3DLoadingNotificationId.current); // Use removeNotification
+          global3DLoadingNotificationId.current = null;
+        }
+      }
+    }, [addNotification,removeNotification]); 
+
+  const startPolling3DCoords = useCallback((currentSessionId: string) => {
+    // Clear any existing polling to prevent duplicates
+    if (global3DTaskPollingId.current) {
+      clearInterval(global3DTaskPollingId.current);
+    }
+    // Poll every 3 seconds (adjust as needed)
+    global3DTaskPollingId.current = setInterval(() => {
+      fetch3DCoords(currentSessionId);
+    }, 3000); // Poll every 3 seconds
+  }, [fetch3DCoords]); // Add fetch3DCoords to useCallback dependencies
+
+  // Cleanup polling on component unmount
+  useEffect(() => {
+    return () => {
+      if (global3DTaskPollingId.current) {
+        clearInterval(global3DTaskPollingId.current);
+        global3DTaskPollingId.current = null;
+      }
+    };
+  }, []); // Empty dependency array means this runs on mount and unmount
+
+
+
+
+  // Determine if the heatmap can be shown
+  const canShowHeatmap = !showStrategySelection && heatmapDataRef.current && containerRef.current;
+
+  // ✅ Memoize network data to prevent unnecessary re-renders
+  const memoizedNetworkData = useMemo(() => {
+    if (!networkData || Object.keys(networkData).length === 0) {
+      console.log('🔄 Network data is empty, returning null');
+      return null;
+    }
+    
+    const memoized = {
+      sessionId: networkData.sessionId,
+      geneIds: networkData.geneIds,
+      clusterName: networkData.clusterName,
+      filters: networkData.filters,
+      global3DPositions: networkData.global3DPositions,
+      isGlobal3DLoading: networkData.isGlobal3DLoading,
+      global3DError: networkData.global3DError,
+      metadata: networkData.metadata
+    };
+    
+    console.log('🔄 Memoized network data created:', {
+      sessionId: memoized.sessionId,
+      clusterName: memoized.clusterName,
+      geneCount: memoized.geneIds?.length
+    });
+    
+    return memoized;
+  }, [
+    networkData?.sessionId,
+    networkData?.clusterName,
+    JSON.stringify(networkData?.geneIds),
+    JSON.stringify(networkData?.filters),
+    networkData?.global3DPositions,
+    networkData?.isGlobal3DLoading,
+    networkData?.global3DError,
+    networkData?.metadata
+  ]);
+
+return (
+  <>
+    {showStrategySelection && missingValueSummary && (
+      <div className="modal-overlay">
+        <div className="modal-content">
+          <ImputationStrategySelector 
+            missingValueSummary={missingValueSummary}
+            onStrategySelect={handleStrategySelection}
+            isProcessing={isLoading}
+          />
+        </div>
       </div>
-    );
-  }
+    )}
 
-  return (
+    {/* MAIN CONTAINER - This is what gets the ref and contains everything */}
     <div
       id={id}
       ref={containerRef}
       style={{
         width: "100%",
-        height: "100%",
-        minHeight: "100%",
+        // ❌ Remove height: "100%" - this was constraining it
+        // ✅ Let it grow naturally with content
+        minHeight: "100%", // Start with full height but allow growth
         position: "relative",
         display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-             // marginTop:'5px'
-        // border: "1px solid #E0E0E0",
-        padding:"0px"
+        flexDirection: "column", // ✅ Stack content vertically
       }}
     >
-      {containerRef.current ? (
-        <DeckGLHeatmap
-          key={heatmapVersion} // ✅ Forces component re-render when data changes
-          data={heatmapDataRef.current} // ✅ Uses latest data efficiently
-          dataId={id}
-          container={containerRef.current}
-          position="relative"
-          categories={categories}
-          setValueScale={
-            ['olinkPatientHeatmap', 'cytofPatientHeatmap', 'serologyPatientHeatmap'].includes(id)
-              ? setValScale
-              : setResultValueType
-          }
-          setResultCategory={setResultCat}
-          resultCategories={['Timepoints', 'ARMs', 'Response']}
-          valueScale={valScale}
-          legend={{ width: 175 - 20, height: 30 }}
-          labels={{
-            row: { maxSize: 15, titleSize: 8, maxChars: 10 },
-            column: { maxSize: 5, titleSize: 8, maxChars: 10, angle: 45 },
+      {/* HEATMAP SECTION - Always visible */}
+      <div
+        style={{
+          width: "100%",
+          minHeight: "95%", // Heatmap takes at least full viewport
+          flex: "0 0 auto", // Don't shrink
+          position: "relative",
+          marginBottom: showNetwork || showPathwayView ? "20px" : "50px" // Less margin when network is shown
+        }}
+      >
+                {canShowHeatmap ? (
+          <DeckGLHeatmap
+            key={heatmapVersion}
+            data={heatmapDataRef.current}
+            dataId={id}
+            container={containerRef.current!}
+            position="relative"
+            categories={categories}
+            setValueScale={['olinkPatientHeatmap', 'cytofPatientHeatmap', 'serologyPatientHeatmap'].includes(id) ? setValScale : setResultValueType}
+            setResultCategory={setResultCat}
+            resultCategories={['Timepoints', 'ARMs', 'Response']}
+            valueScale={valScale}
+            legend={{ width: 175 - 20, height: 30 }}
+            labels={{ row: { maxSize: 15, titleSize: 8, maxChars: 10 }, column: { maxSize: 5, titleSize: 8, maxChars: 10, angle: 45 }}}
+            valueType={resultValueType}
+            panelWidth={200}
+            sessionID={sessionId.current}
+            onShowNetwork={handleShowNetwork}
+            onShowPathwayNetwork={handleShowPathwayAnalysis}
+            notifyClusteringStarted={notifyClusteringStarted}
+            notifyClusteringSuccess={notifyClusteringSuccess}
+            notifySortStarted={notifySortStarted}
+            notifySortSuccess={notifySortSuccess}
+            showLoading={showLoading}
+            hideLoading={hideLoading}
+            addNotification={addNotification}
+          />
+        ) : (
+          !showStrategySelection && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <CircularProgress />
+            </div>
+          )
+        )}
+      </div>
+
+      {/* NETWORK SECTION - Shows below heatmap when open */}
+      {!showStrategySelection && showNetwork && networkData && (
+        <div 
+          data-network-section 
+          style={{
+            width: "100%",
+            minHeight: "100vh", // Network takes full viewport when shown
+            flex: "0 0 auto", // Don't shrink
+            backgroundColor: "#f8f9fa", // Optional: visual distinction
+            borderTop: "2px solid #e9ecef", // Optional: separator
+            position: "relative",
+            marginTop: "20px"
           }}
-          valueType={resultValueType}
-          panelWidth={175}
-        />
-      ) : (
-        <CircularProgress />
+        >
+
+          
+          <NetworkVisualizationComponent 
+            key={`network-${memoizedNetworkData?.sessionId}-${memoizedNetworkData?.clusterName}`}
+            networkData={memoizedNetworkData}
+            onClose={handleHideNetwork}
+            onSuccess={handleNetworkSuccess}
+            onError={handleNetworkError}
+          />
+        </div>
+      )}
+
+      {/* PATHWAY SECTION - Shows below heatmap when open */}
+      {!showStrategySelection && showPathwayView && (
+        <div 
+          data-pathway-section 
+          style={{
+            width: "100%",
+            minHeight: "100vh", // Pathway takes full viewport when shown
+            flex: "0 0 auto",
+            backgroundColor: "#f1f3f4",
+            borderTop: "2px solid #e9ecef",
+            position: "relative"
+          }}
+        >
+          {/* Pathway header with close button */}
+          <div style={{ 
+            padding: '10px 20px', 
+            backgroundColor: '#fff', 
+            borderBottom: '1px solid #e9ecef',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#333' }}>
+                🧭 Pathway Analysis
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button 
+                onClick={() => {
+                  document.querySelector('[data-pathway-section]')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                📍 Jump to Pathway
+              </button>
+              <button 
+                onClick={() => {
+                  document.querySelector(`#${id}`)?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                ⬆️ Back to Heatmap
+              </button>
+              <button 
+                onClick={handleHidePathwayAnalysis}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                ✕ Close Pathway
+              </button>
+            </div>
+          </div>
+          
+          {pathwayAnalysisData && (
+            <PathwayAnalysisView
+              analysisData={pathwayAnalysisData}
+              onClose={handleHidePathwayAnalysis}
+            />
+          )}
+        </div>
       )}
     </div>
-  );
+
+
+
+    <AppNotificationSystem
+      notifications={notifications}
+      isLoading={isLoading}
+      loadingMessage={loadingMessage}
+      onRemove={removeNotification}
+      onActionClick={handleScrollToAction}
+    />
+  </>
+);
 };
 
 export default HeatmapWrapper;

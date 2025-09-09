@@ -1,0 +1,41 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../primavo/PRIMAVO"
+		},
+		{
+			"path": "../../../../../../Downloads/deckgl-heatmap-master"
+		},
+		{
+			"path": "../../../../../primavo/PRIMAVO-Backend"
+		},
+		{
+			"path": "../../../../../LabWebsite/labWebiste"
+		},
+		{
+			"path": "../../../../../LabWebsite/Oncoprint/react-oncoprint"
+		},
+		{
+			"path": "../../../../../serverless-function"
+		},
+		{
+			"path": "../../../../Backend/HeatmapBackend"
+		},
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../../../sunbeam/sunbeam-abc-portal"
+		},
+		{
+			"path": "../../../../../GoogleTagPhosnetVisNov15"
+		},
+		{
+			"path": "../../../../../primavo/sunbeam_duplicate"
+		},
+		{
+			"path": "../../../../../iCAVE/iCAVE"
+		}
+	],
+	"settings": {}
+}

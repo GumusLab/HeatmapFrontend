@@ -1,70 +1,80 @@
-# Getting Started with Create React App
+# ClusterChirp
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An interactive heatmap visualization tool for exploring tabular data with on-the-fly clustering, correlation networks, pathway analysis, and an AI-powered chatbot. Built for researchers and data scientists.
 
-## Available Scripts
+**Live demo:** [https://clusterchirp.mssm.edu](https://clusterchirp.mssm.edu)
 
-In the project directory, you can run:
+## Quick Start with Docker
 
-### `npm start`
+The easiest way to run ClusterChirp locally is with Docker. No setup required.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```bash
+docker pull ghcr.io/gumuslab/clusterchirp:latest
+docker run -p 8080:80 ghcr.io/gumuslab/clusterchirp:latest
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
-### `npm test`
+### Enable AI Chat (Optional)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+The built-in AI chatbot lets you interact with your heatmap using natural language commands (e.g., "show top 20 most variant genes", "cluster rows", "sort by variance"). It requires an OpenAI API key.
 
-### `npm run build`
+```bash
+docker run -p 8080:80 -e OPENAI_API_KEY=sk-your-key ghcr.io/gumuslab/clusterchirp:latest
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+You can get an API key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+All other features (heatmap visualization, clustering, correlation networks, pathway analysis) work without an API key.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Features
 
-### `npm run eject`
+- **Interactive Heatmap** — Upload CSV, TSV, or XLSX files and visualize with real-time clustering
+- **AI Chatbot** — Natural language commands to filter, sort, cluster, and explore your data
+- **Correlation Networks** — Visualize gene correlation networks in 2D and 3D
+- **Pathway Analysis** — Enrichment analysis with KEGG, Reactome, WikiPathway, and more
+- **Example Datasets** — Preloaded proteomics, genomics, and immunogenomics datasets to explore
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Development Setup
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Prerequisites
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+- Node.js >= 18
+- Python 3.11+
+- Backend repo: [GumusLab/HeatmapBackend](https://github.com/GumusLab/HeatmapBackend)
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+### Frontend
 
-## Learn More
+```bash
+npm install
+npm start
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Runs on [http://localhost:3000](http://localhost:3000).
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Backend
 
-### Code Splitting
+See the [HeatmapBackend](https://github.com/GumusLab/HeatmapBackend) repo for backend setup instructions.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Architecture
 
-### Analyzing the Bundle Size
+| Component | Technology |
+|---|---|
+| Frontend | React, TypeScript, deck.gl, MUI |
+| Backend | Django, Django REST Framework |
+| Clustering | scipy, scikit-learn, numba |
+| AI Chat | OpenAI GPT-4o-mini |
+| Docker | nginx + gunicorn + supervisord |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Citation
 
-### Making a Progressive Web App
+If you use ClusterChirp in your research, please cite:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+> Rawal, O., et al. "ClusterChirp: A GPU-accelerated Web Server for Natural Language-Guided Interactive Visualization and Analysis of Large Omics Data." arXiv preprint (2026).
+> [https://doi.org/10.48550/arXiv.2602.08280](https://doi.org/10.48550/arXiv.2602.08280)
 
-### Advanced Configuration
+## License
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+This project is developed by the [Gumus Lab](https://github.com/GumusLab) at the Icahn School of Medicine at Mount Sinai.
 
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+ClusterChirp is freely available for all users. No registration required.

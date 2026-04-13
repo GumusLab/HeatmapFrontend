@@ -1061,6 +1061,10 @@ export const useDataState = (
           group: rowNodeMap.get(v.trim())['group'],
           // group: jsonData.row_nodes.filter((d: { name: string;})=>d.name === v.trim())[0]["group"],
         })),
+        // Add sorted indices for crop functionality
+        // In useDataState, we just use sequential indices since we're processing all data
+        sortedRowIndices: rows.map((_, i) => i),
+        sortedColIndices: columns.map((_, i) => i),
       };
     }
     return null;

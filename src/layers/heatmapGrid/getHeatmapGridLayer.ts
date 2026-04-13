@@ -367,7 +367,7 @@
 
 
 import { PolygonLayer } from '@deck.gl/layers/typed';
-import { IDS } from '../../const';
+import { IDS, BASE_ZOOM } from '../../const';
 import { OnClickType } from '../../DeckGLHeatmap.types';
 import { HeatmapStateShape, DataStateShape } from '../../types';
 
@@ -378,11 +378,12 @@ interface CropBox {
   endY: number;
 }
 
-// Helper: Determines the aggregation level based on zoom.
+// Helper: Determines the aggregation level based on zoom (BASE_ZOOM from const)
 function getAggregationFactor(zoom: number): number {
-  if (zoom > -2) return 1; // No aggregation
-  if (zoom > -4) return 2; // 2x2 aggregation
-  if (zoom > -6) return 4; // 4x4 aggregation
+  // Generic thresholds relative to BASE_ZOOM
+  if (zoom >= BASE_ZOOM) return 1; // No aggregation at or above BASE_ZOOM
+  if (zoom > BASE_ZOOM - 2) return 2; // 2x2 aggregation
+  if (zoom > BASE_ZOOM - 4) return 4; // 4x4 aggregation
   return 8; // 8x8 aggregation at farthest zoom
 }
 
@@ -471,9 +472,11 @@ export function getHeatmapGridLayer(
   // Adjust offset based on filtering to keep the view centered on the cropped area
   const offsetX = filteredIdxDict ? (filteredIdxDict.startX * width) : 0;
   const offsetY = filteredIdxDict ? (filteredIdxDict.startY * height) : 0;
-  
-  const centeringX = heatmapWidth / 4;
-  const centeringY = heatmapHeight / 4;
+
+  // Generic centering calculation based on BASE_ZOOM
+  const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+  const centeringX = heatmapWidth / 2 / baseScaleFactor;
+  const centeringY = heatmapHeight / 2 / baseScaleFactor;
 
   // --- AGGREGATED (ZOOMED-OUT) VIEW ---
   if (needsAggregation) {
@@ -548,17 +551,12 @@ export function getHeatmapGridLayer(
       return isInFilteredArea(rowIndex, colIndex, filteredIdxDict);
     });
     
-    console.log('🎯 HEATMAP FILTER DEBUG - Total visible indices:', visibleIndices.length);
-    console.log('🎯 HEATMAP FILTER DEBUG - Filtered visible indices:', filteredVisibleIndices.length);
-    console.log('🎯 HEATMAP FILTER DEBUG - Crop box:', filteredIdxDict);
   }
-  
+
   const dataObject = {
     length: filteredVisibleIndices.length,
     indices: filteredVisibleIndices,
   };
-
-  console.log('********* dataObject is as follows *********',dataObject)
 
   return new PolygonLayer({
     id: 'heatmap-grid-layer-detailed',

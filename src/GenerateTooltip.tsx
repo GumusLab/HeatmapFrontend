@@ -266,13 +266,15 @@ export const  generateTooltipContent: getTooltipType = (info)=>{
 
 
             if (!object.aggregated){
+              // Format value to 3 decimal places to fix Float32Array precision artifacts
+              const formattedValue = typeof object.value === 'number' ? object.value.toFixed(3) : object.value;
               if(object.colCategory){
                 HTML = `Row: ${object.row}<br/>Column: ${object.col}<br/>
                 ${Object.entries(object.colCategory).map(([key,value])=> `${key}:${(value as string).split(':')[1]}`).join('<br/>')}
-                <br/>Value: ${object.value}`
+                <br/>Value: ${formattedValue}`
               }
               else{
-                HTML = `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${object.value}`
+                HTML = `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${formattedValue}`
               }
               return {
                 // html: `Row: ${object.row}<br/>Column: ${object.col}<br/>Value: ${object.value}`,
@@ -295,10 +297,12 @@ export const  generateTooltipContent: getTooltipType = (info)=>{
             }
             else{
               // Tooltip for an AGGREGATED cell
+              // Format value to 3 decimal places to fix Float32Array precision artifacts
+              const formattedValue = typeof object.value === 'number' ? object.value.toFixed(3) : object.value;
                   HTML = `
                   <div style="text-align: left; font-family: sans-serif; font-size: 13px; padding: 4px;">
                     <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px;">Aggregated Cell</div>
-                    <div><strong>Avg. Value:</strong> ${object.value}</div>
+                    <div><strong>Avg. Value:</strong> ${formattedValue}</div>
                     <div style="margin-top: 5px;">
                       <strong>Contains:</strong><br>
                       &nbsp;&nbsp;${object.rowCount} rows<br>

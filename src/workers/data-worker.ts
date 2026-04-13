@@ -4,20 +4,58 @@ import { computeDataState } from '../computeDatastate'; // This function contain
 import { getHeatmapState } from '../state/getHeatmapState'; // Your heatmap state computation function
 import { DataStateShape } from '../types';
 
-// Global variable to store the computed data state
+// Global state stored between messages
 let currentDataState: DataStateShape | null = null;
+// Cache the last heatmapState params so we can recompute heatmapState when dataState changes
+let lastHeatmapParams: {
+  colLabelsWidth: number;
+  rowLabelsWidth: number;
+  dimensions: any;
+  ID: any;
+  panelWidth: number;
+} | null = null;
 
 self.addEventListener('message', (event: MessageEvent) => {
   const message = event.data;
 
   if (message.messageType === 'dataState') {
-    // Compute the data state based on the incoming JSON data, order, and categories
-    currentDataState = computeDataState(message.data, message.order, message.catTemporary);
-    // Post the computed data state back to the main thread
-    self.postMessage({ dataState: currentDataState });
+    // Compute the data state based on the incoming JSON data, order, categories
+    // croppedRowIndices/croppedColIndices: Arrays of ORIGINAL indices to include (for crop)
+    currentDataState = computeDataState(
+      message.data,
+      message.order,
+      message.catTemporary,
+      message.croppedRowIndices,  // Original indices from visual selection
+      message.croppedColIndices   // Original indices from visual selection
+    );
+
+    // Also recompute heatmapState if we have cached dimension params.
+    // This ensures both states are sent together — preventing a blank frame where
+    // the main thread has new dataState but stale heatmapState (old colors/values).
+    if (lastHeatmapParams) {
+      const heatmapState = getHeatmapState(
+        currentDataState,
+        lastHeatmapParams.colLabelsWidth,
+        lastHeatmapParams.rowLabelsWidth,
+        lastHeatmapParams.dimensions,
+        lastHeatmapParams.ID,
+        lastHeatmapParams.panelWidth
+      );
+      self.postMessage({ dataState: currentDataState, heatmapState });
+    } else {
+      self.postMessage({ dataState: currentDataState });
+    }
   } else if (message.messageType === 'heatmapState') {
+    // Cache the dimension params for future dataState recomputes
+    lastHeatmapParams = {
+      colLabelsWidth: message.colLabelsWidth,
+      rowLabelsWidth: message.rowLabelsWidth,
+      dimensions: message.dimensions,
+      ID: message.ID,
+      panelWidth: message.panelWidth,
+    };
+
     if (currentDataState) {
-      // Compute the heatmap state using the previously computed data state
       const heatmapState = getHeatmapState(
         currentDataState,
         message.colLabelsWidth,
@@ -26,10 +64,8 @@ self.addEventListener('message', (event: MessageEvent) => {
         message.ID,
         message.panelWidth
       );
-      // Post the computed heatmap state back to the main thread
       self.postMessage({ heatmapState });
     } else {
-      // If data state hasn't been computed yet, send an error or null
       self.postMessage({ heatmapState: null, error: 'dataState not computed yet' });
     }
   }

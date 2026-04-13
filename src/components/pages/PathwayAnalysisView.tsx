@@ -474,13 +474,13 @@ const PathwayAnalysisView: React.FC<PathwayAnalysisViewProps> = ({
         </IconButton>
       </Box>
 
- <Grid container sx={{ flexGrow: 1, overflow: 'hidden' }}>
+ <Grid container sx={{ flexGrow: 1, overflow: 'hidden', height: '100%' }}>
 
-
-       {/* Left Panel: Results - Much more compact */}
-       <Grid item xs={12} md={4} lg={3.5} sx={{ 
+       {/* Left Panel: Results - Very compact with minimal width */}
+       <Grid item xs={12} md={2.5} lg={2} sx={{ 
         overflowY: 'auto', 
         height: '100%',
+        pr: 1, // Small right padding for spacing from right panel
         '&::-webkit-scrollbar': {
           width: '6px',
         },
@@ -494,18 +494,16 @@ const PathwayAnalysisView: React.FC<PathwayAnalysisViewProps> = ({
         },
         '&::-webkit-scrollbar-thumb:hover': {
           background: '#94a3b8',
-        },
-        pt: 0, // ✅ Add this line to set padding-top to zero
-
+        }
       }}>
          {Object.entries(libraries).map(([libraryName, terms]) => (
           <Accordion 
             key={libraryName} 
             defaultExpanded
             sx={{
-              // mb: 1,
+              mb: 0.5, // Minimal bottom margin
               background: 'white',
-              borderRadius: '12px !important',
+              borderRadius: '8px !important',
               boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
               '&:before': { display: 'none' },
               overflow: 'hidden'
@@ -550,8 +548,9 @@ const PathwayAnalysisView: React.FC<PathwayAnalysisViewProps> = ({
                     onClick={() => handleTermSelect(term)}
                     selected={selectedTerm?.name === term.name}
                     sx={{
-                      py: 1,
-                      px: 2,
+                      py: 0.25, // Further reduced from 0.5 to 0.25
+                      px: 0.75, // Further reduced from 1.5 to 0.75
+                      minHeight: '35px', // Reduced from 40px to 35px
                       borderBottom: index < terms.length - 1 ? '1px solid #f1f5f9' : 'none',
                       '&.Mui-selected': {
                         background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
@@ -565,21 +564,25 @@ const PathwayAnalysisView: React.FC<PathwayAnalysisViewProps> = ({
                     <ListItemText 
                       primary={
                         <Typography sx={{ 
-                          fontSize: '13px', 
-                          fontWeight: 500,
+                          fontSize: '13px', // Increased from 12px to 13px
+                          fontWeight: 600, // Increased from 500 to 600
                           color: '#1f2937',
-                          lineHeight: 1.3
+                          lineHeight: 1.2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
                         }}>
                           {term.name}
                         </Typography>
                       }
                       secondary={
                         <Typography sx={{ 
-                          fontSize: '11px',
-                          color: '#6b7280',
-                          mt: 0.5
+                          fontSize: '12px', // Increased from 11px to 12px
+                          color: '#374151',
+                          fontWeight: 700, // Made bold (increased from 500 to 700)
+                          mt: 0.1 // Further reduced from 0.25 to 0.1
                         }}>
-                          p = {term.pValue.toExponential(1)}
+                          p-value: {term.pValue < 0.001 ? term.pValue.toExponential(2) : term.pValue.toFixed(4)}
                         </Typography>
                       }
                     />
@@ -591,8 +594,8 @@ const PathwayAnalysisView: React.FC<PathwayAnalysisViewProps> = ({
         ))}
       </Grid>
       
-      {/* Right Panel: Visualization - Much more space */}
-      <Grid item xs={12} md={8} lg={8.5} sx={{ 
+      {/* Right Panel: Visualization - Maximum space */}
+      <Grid item xs={12} md={9.5} lg={10} sx={{ 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center', 

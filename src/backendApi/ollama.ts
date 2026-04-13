@@ -37,7 +37,9 @@ export interface PathwayResult {
     value?: string;
     updated_filters?: any;
     clustering_result?: any;
-    pathway_results?: PathwayResult[]; // Add this line
+    pathway_results?: PathwayResult[];
+    distance?: string;  // For set_clustering action
+    linkage?: string;   // For set_clustering action
     error?: string;
   }
   
@@ -158,6 +160,7 @@ export async function queryOllama(
         return response;
     } catch (error) {
         console.error("Failed to process Ollama query:", error);
-        return { error: 'Failed to process Ollama query' };
+        const message = error instanceof Error ? error.message : 'Failed to process AI query';
+        return { error: message };
     }
 }

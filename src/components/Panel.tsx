@@ -140,7 +140,12 @@ export default function PersistentDrawerLeft({
     
     // 2. ✅ Then, set the order to begin the work (your existing logic)
     setSelectedRowIndex(index);
-    setOrder((prevOrder:any) => ({ ...prevOrder, row: actionType, sortByRowCat:""}));
+    setOrder((prevOrder:any) => ({ 
+      ...prevOrder, 
+      row: actionType, 
+      sortByRowCat:"",
+      sortColsByRowName: null  // Clear gene-based column sorting when changing row sort
+    }));
   };
 
   const handleColItemClick = (index: number) => {
@@ -154,7 +159,7 @@ export default function PersistentDrawerLeft({
 
     // 2. ✅ Then, set the order to begin the work (your existing logic)
     setSelectedColIndex(index);
-    setOrder((prevOrder:any) => ({ ...prevOrder, col: actionType, sortByColCat:""}));
+    setOrder((prevOrder:any) => ({ ...prevOrder, col: actionType, sortByColCat:"", sortColsByRowName: null}));
   };
 
   useEffect(() => {
@@ -327,7 +332,7 @@ export default function PersistentDrawerLeft({
 }}>
             Opacity Slider
           </h3>
-        <MultipurposeSlider direction='horizontal' setOpacityValue={setOpacityValue} minVal={0.5} maxVal={3} step={0.5} initialVal={1}/>
+        <MultipurposeSlider direction='horizontal' setOpacityValue={setOpacityValue} minVal={0.5} maxVal={3} step={0.25} initialVal={1}/>
         {/* <MultipurposeSlider direction='horizontal' setOpacityValue={setOpacityValue} minVal={0} maxVal={1} step={0.05} initialVal={0.05} calculateSteps={true}/> */}
         </div>
 
@@ -359,7 +364,7 @@ export default function PersistentDrawerLeft({
         />
 
         {colCategorynames.length>0 &&
-        <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'30px',display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'}}>
+        <div style={{ marginLeft: '10px', marginRight: '10px',marginTop:'20px',display: 'flex', flexDirection: 'column', justifyContent: 'flex-start'}}>
         <MultiSelect elements={colCategorynames} order={order} setOrder={setOrder} axis='col'/>
         </div>}
 

@@ -1,10 +1,8 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { DataStateShape, HeatmapStateShape, ViewState } from './types';
-import { IDS } from './const';
+import { IDS, BASE_ZOOM } from './const';
 import {ViewStateChangeProps} from "./state/useViewStates"
 import clamp from 'lodash/clamp';
-
-const BASE_ZOOM = 1; // From your constants
 
 interface HeatmapMinimapProps {
   viewState: ViewState;
@@ -261,8 +259,8 @@ const HeatmapMinimap: React.FC<HeatmapMinimapProps> = ({
   onViewStateChange,
   dataState,
   heatmapState,
-  width = 180,
-  height = 180,
+  width: propWidth = 180,
+  height: propHeight = 180,
   position = 'bottom-right',
   gridResolution = 25,
   colLabelsWidth,
@@ -275,16 +273,48 @@ const HeatmapMinimap: React.FC<HeatmapMinimapProps> = ({
   const [viewportRect, setViewportRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [densityData, setDensityData] = useState<ImageData | null>(null);
-  
+
+  // Calculate minimap dimensions based on data aspect ratio
+  const { width, height } = useMemo(() => {
+    if (!dataState || !heatmapState) {
+      return { width: propWidth, height: propHeight };
+    }
+
+    const dataWidth = dataState.numColumns * heatmapState.cellDimensions.width;
+    const dataHeight = dataState.numRows * heatmapState.cellDimensions.height;
+    const dataRatio = dataWidth / dataHeight;
+
+    // Use the larger of propWidth/propHeight as the base dimension
+    const maxDimension = Math.max(propWidth, propHeight);
+
+    let calculatedWidth: number;
+    let calculatedHeight: number;
+
+    if (dataRatio > 1) {
+      // Data is wider than tall
+      calculatedWidth = maxDimension;
+      calculatedHeight = maxDimension / dataRatio;
+    } else {
+      // Data is taller than wide
+      calculatedHeight = maxDimension;
+      calculatedWidth = maxDimension * dataRatio;
+    }
+
+    return {
+      width: Math.round(calculatedWidth),
+      height: Math.round(calculatedHeight)
+    };
+  }, [dataState, heatmapState, propWidth, propHeight]);
+
   // Calculate total dimensions and scales
   const totalDimensions = useMemo(() => {
     if (!dataState || !heatmapState) return { width: 0, height: 0, scaleX: 1, scaleY: 1 };
-    
+
     // Use dataState dimensions directly - backend filtering should provide correct dimensions
     const totalWidth = dataState.numColumns * heatmapState.cellDimensions.width;
     const totalHeight = dataState.numRows * heatmapState.cellDimensions.height;
-    
-    
+
+
     return {
       width: totalWidth,
       height: totalHeight,
@@ -299,43 +329,57 @@ const HeatmapMinimap: React.FC<HeatmapMinimapProps> = ({
     
     // Get zoom value
     const zoom = Array.isArray(viewState.zoom) ? viewState.zoom[0] : viewState.zoom;
-    
+
     // Calculate scale factor based on your onViewStateChange logic
     const nextScaleFactor = 2 ** (zoom - BASE_ZOOM);
-    
+
     // Get the actual view dimensions and calculate visible area in world coordinates
     const actualViewWidth = heatmapState.width;
     const actualViewHeight = heatmapState.height;
-    
+
+    // Calculate viewport size in world coordinates (matching useViewStates.ts logic)
+    // In useViewStates.ts: viewW = heatmapState.width / scale, halfW = viewW / 2 / baseScaleFactor
+    // Since baseScaleFactor = 2^BASE_ZOOM = 1 (when BASE_ZOOM = 0)
+    // halfW = (heatmapState.width / scale) / 2 = heatmapState.width / (2 * scale)
+    const baseScaleFactor = 2 ** BASE_ZOOM;
+    const viewW = actualViewWidth / nextScaleFactor;
+    const viewH = actualViewHeight / nextScaleFactor;
+    const halfW = viewW / 2 / baseScaleFactor;
+    const halfH = viewH / 2 / baseScaleFactor;
+
     // Calculate the visible area in world coordinates (matching your constraint logic)
     const visibleArea = {
-      minX: viewState.target[0] - (actualViewWidth / 4) / nextScaleFactor,
-      minY: viewState.target[1] - (actualViewHeight / 4) / nextScaleFactor,
-      maxX: viewState.target[0] + (actualViewWidth / 4) / nextScaleFactor,
-      maxY: viewState.target[1] + (actualViewHeight / 4) / nextScaleFactor
+      minX: viewState.target[0] - halfW,
+      minY: viewState.target[1] - halfH,
+      maxX: viewState.target[0] + halfW,
+      maxY: viewState.target[1] + halfH
     };
     
     // Calculate the data bounds in world coordinates using dataState dimensions
     if (!heatmapState || !dataState) return;
-    
+
     const cellWidth = heatmapState.cellDimensions.width;
     const cellHeight = heatmapState.cellDimensions.height;
-    
+
     // Use dataState dimensions directly - backend filtering should provide correct dimensions
     const dataWidth = dataState.numColumns * cellWidth;
     const dataHeight = dataState.numRows * cellHeight;
-    
-    // For filtered data, the coordinate system should start from 0,0 and extend to dataWidth,dataHeight
-    // The offset is used for view centering, not for data bounds
-    const offsetX = actualViewWidth / 4;
-    const offsetY = actualViewHeight / 4;
-    
-    // The actual data bounds should be based on the data coordinate system
+
+    // Calculate offset matching useViewStates.ts logic:
+    // offsetX = heatmapState.width / 2 / baseScaleFactor
+    const offsetX = actualViewWidth / 2 / baseScaleFactor;
+    const offsetY = actualViewHeight / 2 / baseScaleFactor;
+
+    // The actual navigable data bounds should match the target constraints in useViewStates.ts
+    // The target can go from (-offsetX + halfW) to (dataW - offsetX - halfW)
+    // So the viewport's left edge can go from (-offsetX + halfW - halfW) = -offsetX
+    // And the viewport's right edge can go from (dataW - offsetX - halfW + halfW) = dataW - offsetX
+    // This means the data bounds for the minimap are the full data extent
     const dataMinX = -offsetX;
     const dataMinY = -offsetY;
     const dataMaxX = dataWidth - offsetX;
     const dataMaxY = dataHeight - offsetY;
-    
+
     // Convert to minimap coordinates with proper offset
     // Map world coordinates [dataMinX, dataMaxX] to minimap coordinates [0, width]
     const minimapX = ((visibleArea.minX - dataMinX) / (dataMaxX - dataMinX)) * width;
@@ -344,6 +388,26 @@ const HeatmapMinimap: React.FC<HeatmapMinimapProps> = ({
     const minimapHeight = ((visibleArea.maxY - visibleArea.minY) / (dataMaxY - dataMinY)) * height;
     
     // Debug logging
+    console.log('🗺️ Minimap Debug:', {
+      visibleArea,
+      dataBounds: { minX: dataMinX, maxX: dataMaxX, minY: dataMinY, maxY: dataMaxY },
+      minimapBox: { x: minimapX, y: minimapY, width: minimapWidth, height: minimapHeight },
+      minimapSize: { width, height },
+      boxRightEdge: minimapX + minimapWidth,
+      boxBottomEdge: minimapY + minimapHeight,
+      shouldReachRight: minimapX + minimapWidth >= width - 1,
+      shouldReachBottom: minimapY + minimapHeight >= height - 1,
+      target: viewState.target,
+      zoom,
+      // Additional debug
+      heatmapStateSize: { width: heatmapState.width, height: heatmapState.height },
+      actualViewSize: { width: actualViewWidth, height: actualViewHeight },
+      offsetX, offsetY,
+      dataSize: { width: dataWidth, height: dataHeight },
+      cellSize: { width: cellWidth, height: cellHeight },
+      numCells: { cols: dataState.numColumns, rows: dataState.numRows }
+    });
+
     // console.log('Minimap Debug:', {
     //   zoom,
     //   nextScaleFactor,
@@ -517,23 +581,26 @@ const HeatmapMinimap: React.FC<HeatmapMinimapProps> = ({
     } else {
       // Click outside viewport - center view on click point
       if (!heatmapState || !dataState) return;
-      
+
       // Convert minimap coordinates back to world coordinates using dataState dimensions
       const cellWidth = heatmapState.cellDimensions.width;
       const cellHeight = heatmapState.cellDimensions.height;
-      
+
       // Use dataState dimensions directly
       const dataWidth = dataState.numColumns * cellWidth;
       const dataHeight = dataState.numRows * cellHeight;
-      
-      const offsetX = heatmapState.width / 4;
-      const offsetY = heatmapState.height / 4;
-      
+
+      // Calculate offset matching useViewStates.ts logic:
+      // offsetX = heatmapState.width / 2 / baseScaleFactor (where baseScaleFactor = 2^BASE_ZOOM = 1)
+      const baseScaleFactor = 2 ** BASE_ZOOM;
+      const offsetX = heatmapState.width / 2 / baseScaleFactor;
+      const offsetY = heatmapState.height / 2 / baseScaleFactor;
+
       const dataMinX = -offsetX;
       const dataMinY = -offsetY;
       const dataMaxX = dataWidth - offsetX;
       const dataMaxY = dataHeight - offsetY;
-      
+
       // Map minimap coordinates [0, width] back to world coordinates [dataMinX, dataMaxX]
       const worldX = dataMinX + (x / width) * (dataMaxX - dataMinX);
       const worldY = dataMinY + (y / height) * (dataMaxY - dataMinY);
@@ -590,13 +657,17 @@ const HeatmapMinimap: React.FC<HeatmapMinimapProps> = ({
     // Convert viewport rectangle back to world coordinates with proper offset
     const cellWidth = heatmapState.cellDimensions.width;
     const cellHeight = heatmapState.cellDimensions.height;
-    
+
     // Use dataState dimensions directly
     const dataWidth = dataState.numColumns * cellWidth;
     const dataHeight = dataState.numRows * cellHeight;
-    const offsetX = heatmapState.width / 4;
-    const offsetY = heatmapState.height / 4;
-    
+
+    // Calculate offset matching useViewStates.ts logic:
+    // offsetX = heatmapState.width / 2 / baseScaleFactor (where baseScaleFactor = 2^BASE_ZOOM = 1)
+    const baseScaleFactor = 2 ** BASE_ZOOM;
+    const offsetX = heatmapState.width / 2 / baseScaleFactor;
+    const offsetY = heatmapState.height / 2 / baseScaleFactor;
+
     const dataMinX = -offsetX;
     const dataMinY = -offsetY;
     const dataMaxX = dataWidth - offsetX;
@@ -640,12 +711,14 @@ const HeatmapMinimap: React.FC<HeatmapMinimapProps> = ({
     });
   };
   
+  console.log('Minimap dimensions:', { width, height, propWidth, propHeight });
+
   return (
     <div
       style={{
         width: `${width}px`,
         height: `${height}px`,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: 'transparent',
         border: '1px solid #808080',
         borderRadius: '6px',
         overflow: 'hidden',

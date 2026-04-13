@@ -116,7 +116,7 @@
 import clamp from 'lodash/clamp';
 import { getColorRange } from '../layers/heatmapGrid/getColorRange';
 import { DataStateShape } from '../types';
-import { HEATMAP_HEIGHT, HEATMAP_WIDTH } from '../const';
+import { HEATMAP_HEIGHT, HEATMAP_WIDTH, HEATMAP_PARENT_HEIGHT_RATIO } from '../const';
 
 const getColorFromRange = (
   value: number,
@@ -172,7 +172,19 @@ export const getHeatmapState = (
   // const valuesArray = new Float32Array(totalCells);
 
   const heatmapWidth = (dimensions[0] - panelWidth) * HEATMAP_WIDTH / 100 - rowLabelsWidth;
-  const heatmapHeight = dimensions[1] * HEATMAP_HEIGHT / 100 - colLabelsWidth;
+  // Account for HEATMAP_PARENT_HEIGHT_RATIO (parent container is only 90% of full height)
+  const heatmapHeight = dimensions[1] * HEATMAP_PARENT_HEIGHT_RATIO / 100 * HEATMAP_HEIGHT / 100 - colLabelsWidth;
+
+  console.log('🔧 getHeatmapState calculation:', {
+    dimensions,
+    panelWidth,
+    rowLabelsWidth,
+    colLabelsWidth,
+    HEATMAP_WIDTH,
+    HEATMAP_HEIGHT,
+    heatmapWidth,
+    heatmapHeight
+  });
 
   // let index = 0;
   // for (let j = 0; j < numRows; j++) {

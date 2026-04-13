@@ -63,7 +63,7 @@
             
 //             // Key change 4: Directly subtract the offset from xStart
 //             const xStart = i * cellWidth - offsetX;
-//             const grp = dataState.colLabels[i].group?.[sliderValue];
+//             const grp = dataState.colLabels[i].group?.[sliderValue - 1];
 //             let TrapezoidWidth = 1;
 //             const nodes: string[] = [];
 //             const currentCat = order.colCat;
@@ -73,7 +73,7 @@
 //             const patientIdSet: Set<string> = new Set();
     
 //             // Process columns in the same cluster
-//             while((i+1 < numColumns) && (grp === dataState.colLabels[i+1].group?.[sliderValue])){
+//             while((i+1 < numColumns) && (grp === dataState.colLabels[i+1].group?.[sliderValue - 1])){
 //                 TrapezoidWidth += 1;
 //                 nodes.push(dataState.colLabels[i].text);
                 
@@ -273,13 +273,13 @@
 //                     xOffset = -labelWidth/4 + 7*(order.rowCat.length+1) + 3
 //                 }
 //                 const firstAndLastPoint = [-xOffset,i*cellHeight + cellHeight/2];
-//                 const grp = dataState.rowLabels[i].group?.[sliderValue];
+//                 const grp = dataState.rowLabels[i].group?.[sliderValue - 1];
 //                 let TrapezoidHeight = 1;
 //                 const nodes: string[] = [];
 //                 let catDict:Record<string, [number,string|null|undefined]> = {}
     
 //                 // let Gender:Record<string, number> = {}
-//                 while((i+1 < numRows) && (grp === dataState.rowLabels[i+1].group?.[sliderValue])){
+//                 while((i+1 < numRows) && (grp === dataState.rowLabels[i+1].group?.[sliderValue - 1])){
 //                     TrapezoidHeight += 1
 //                     nodes.push(dataState.rowLabels[i].text)
 //                     for(let j = 0; j < currentCat.length; j++){
@@ -404,11 +404,10 @@
 //     }
     
 import { PolygonLayer } from '@deck.gl/layers/typed';
-import { IDS,INITIAL_GAP, LAYER_GAP } from '../../const';
+import { IDS, INITIAL_GAP, LAYER_GAP, BASE_ZOOM, CATEGORY_LAYER_HEIGHT, CLUSTER_LAYER_HEIGHT, CLUSTER_LAYER_GAP } from '../../const';
 import { OnClickType } from '../../DeckGLHeatmap.types';
 import { DataStateShape, HeatmapStateShape, order } from '../../types';
 import { binom_test } from '../../utils/binom_test';
-import { CATEGORY_LAYER_HEIGHT } from "../../const";
 
 
 interface CropBox {
@@ -428,6 +427,37 @@ type CellDatum = {
     numPatients?: number;
 }
 
+// Auto-detect patient/individual identifier from metadata keys
+const PATIENT_ID_PATTERNS = [
+    'patientid', 'patient_id', 'patient',
+    'subjectid', 'subject_id', 'subject',
+    'donorid', 'donor_id', 'donor',
+    'individualid', 'individual_id', 'individual',
+    'participantid', 'participant_id', 'participant',
+    'personid', 'person_id', 'person'
+];
+
+function detectPatientIdentifierKey(metadata: Record<string, string> | null | undefined): string | null {
+    if (!metadata) return null;
+
+    const metadataKeys = Object.keys(metadata);
+    for (const key of metadataKeys) {
+        const keyLower = key.toLowerCase().replace(/[-\s]/g, '_');
+        if (PATIENT_ID_PATTERNS.includes(keyLower)) {
+            return key; // Return the original key (case-sensitive)
+        }
+    }
+    return null;
+}
+
+// Sample-wise categories that should always count every sample (not deduplicated by patient)
+const SAMPLE_WISE_CATEGORY_PATTERNS = ['timepoint', 'time_point', 'time', 'day', 'visit', 'week'];
+
+function isSampleWiseCategory(categoryName: string): boolean {
+    const nameLower = categoryName.toLowerCase().replace(/[-\s]/g, '_');
+    return SAMPLE_WISE_CATEGORY_PATTERNS.some(pattern => nameLower.includes(pattern));
+}
+
 export function getClusterLayer(
   dataState: DataStateShape,
   heatmapState: HeatmapStateShape | null,
@@ -443,6 +473,7 @@ export function getClusterLayer(
   if (heatmapState?.cellData && dataState) {
     const { numColumns, numRows } = dataState;
     const { width: cellWidth, height: cellHeight } = heatmapState.cellDimensions;
+    const heatmapWidth = heatmapState.width;
     const heatmapHeight = heatmapState.height;
 
     const data: CellDatum[] = [];
@@ -455,24 +486,38 @@ export function getClusterLayer(
 
         let i = startCol;
         const allPatientsSet: Set<string> = new Set();
-        const sampleWiseCategories = ['Timepoint','PatientId'];
         let globalCatDict: Record<string, number> = {};
-        
-        const offsetX = heatmapState.width/4;
-    
+
+        // Auto-detect patient identifier from the first column's metadata
+        const firstColMetadata = dataState.colLabels[startCol]?.metadata;
+        const patientIdKey = detectPatientIdentifierKey(firstColMetadata);
+        const hasPatientIdentifier = patientIdKey !== null;
+
+        // Log detection result for debugging
+        if (hasPatientIdentifier) {
+            console.log(`🔍 Auto-detected patient identifier: "${patientIdKey}"`);
+        } else {
+            console.log('🔍 No patient identifier found - treating all samples as unique individuals');
+        }
+
+        // Generic centering calculation based on BASE_ZOOM
+        const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+        const labelSpaceCentering = labelWidth / 2 / baseScaleFactor;
+
+        // Always use heatmap (view) dimensions for centering
+        const offsetX = heatmapWidth / 2 / baseScaleFactor;
+
         while (i <= endCol) {
-            const ht = 15;
-            
-            let yOffset = 10;
-            if (order.colCat.length > 0) {
-                yOffset = 10 + 5 * order.colCat.length;
-            }
-            
+            const ht = CLUSTER_LAYER_HEIGHT;
+
+            // Calculate yOffset to position cluster just above the heatmap
+            // Use labelSpaceCentering similar to row cluster for proper alignment
+            let yOffset = -labelSpaceCentering + CLUSTER_LAYER_HEIGHT;            
             // Calculate shifted position for cluster
             const newColIndex = filteredIdxDict ? (i - filteredIdxDict.startX) : i;
             const xStart = newColIndex * cellWidth - offsetX;
             
-            const grp = dataState.colLabels[i].group?.[sliderValue];
+            const grp = dataState.colLabels[i].group?.[sliderValue - 1];
             let TrapezoidWidth = 1;
             const nodes: string[] = [];
             const currentCat = order.colCat;
@@ -481,115 +526,120 @@ export function getClusterLayer(
             const patientIdSet: Set<string> = new Set();
     
             // Process columns in the same cluster (within filtered range)
-            while ((i + 1 <= endCol) && (grp === dataState.colLabels[i + 1].group?.[sliderValue])) {
+            while ((i + 1 <= endCol) && (grp === dataState.colLabels[i + 1].group?.[sliderValue - 1])) {
                 TrapezoidWidth += 1;
                 nodes.push(dataState.colLabels[i].text);
-                
-                // Patient ID processing
-                let patientID: string = 'null';
+
+                // Get patient ID if available (using auto-detected key)
+                let patientID: string | null = null;
                 const metaData = dataState.colLabels[i]?.metadata;
-                if (metaData?.PatientId) {
-                    patientID = metaData['PatientId'];
+                if (hasPatientIdentifier && patientIdKey && metaData?.[patientIdKey]) {
+                    patientID = metaData[patientIdKey];
                 }
-                
-                if (patientID !== 'null' && !patientIdSet.has(patientID)) {
+
+                // Process each category
+                for (let j = 0; j < currentCat.length; j++) {
+                    const cat = currentCat[j];
+                    const category = dataState.colLabels[i].category?.[cat];
+                    if (!category) continue;
+
+                    const isSampleWise = isSampleWiseCategory(cat);
+
+                    // Determine if this category should count for this sample
+                    let shouldCount = false;
+
+                    if (!hasPatientIdentifier) {
+                        // No patient identifier - count every sample for all categories
+                        shouldCount = true;
+                    } else if (isSampleWise) {
+                        // Sample-wise category (e.g., Timepoint) - count every sample
+                        shouldCount = true;
+                    } else if (patientID && !patientIdSet.has(patientID)) {
+                        // Patient-wise category - only count first occurrence of each patient
+                        shouldCount = true;
+                    }
+
+                    if (shouldCount) {
+                        if (category in catDict) {
+                            catDict[category][0] += 1;
+                        } else {
+                            const color = dataState.colLabels[i].categoryColor?.[cat];
+                            catDict[category] = [1, color];
+                        }
+                    }
+
+                    // Global category tracking for p-value calculation
+                    if (!hasPatientIdentifier || isSampleWise) {
+                        // Count every sample
+                        if (category in globalCatDict) {
+                            globalCatDict[category] += 1;
+                        } else {
+                            globalCatDict[category] = 1;
+                        }
+                    } else if (patientID && !allPatientsSet.has(patientID)) {
+                        // Patient-wise - count once per patient globally
+                        if (category in globalCatDict) {
+                            globalCatDict[category] += 1;
+                        } else {
+                            globalCatDict[category] = 1;
+                        }
+                    }
+                }
+
+                // Track unique patients for this cluster and globally
+                if (patientID && !patientIdSet.has(patientID)) {
                     patientIdSet.add(patientID);
-                    for (let j = 0; j < currentCat.length; j++) {
-                        const cat = currentCat[j];
-                        const category = dataState.colLabels[i].category?.[cat];
-                        const exist = sampleWiseCategories.includes(cat);
-                        
-                        if (category && !exist) {
-                            if (category in catDict) {
-                                catDict[category][0] += 1;
-                            } else {
-                                const color = dataState.colLabels[i].categoryColor?.[cat];
-                                catDict[category] = [1, color];
-                            }
-                        }
-                    }
                 }
-                
-                // Sample-wise categories processing
-                for (let j = 0; j < sampleWiseCategories.length; j++) {
-                    const cat = sampleWiseCategories[j];
-                    if (currentCat.includes(cat)) {
-                        const category = dataState.colLabels[i].category?.[cat];
-                        if (category) {
-                            if (category in catDict) {
-                                catDict[category][0] += 1;
-                            } else {
-                                const color = dataState.colLabels[i].categoryColor?.[cat];
-                                catDict[category] = [1, color];
-                            }
-    
-                            if (category in globalCatDict) {
-                                globalCatDict[category] += 1;
-                            } else {
-                                globalCatDict[category] = 1;
-                            }
-                        }
-                    }
-                }
-                
-                // Global patient tracking
-                if (patientID !== 'null' && !allPatientsSet.has(patientID)) {
+                if (patientID && !allPatientsSet.has(patientID)) {
                     allPatientsSet.add(patientID);
-                    for (let j = 0; j < currentCat.length; j++) {
-                        const cat = currentCat[j];
-                        const category = dataState.colLabels[i].category?.[cat];
-                        const exist = sampleWiseCategories.includes(cat);
-                        
-                        if (category && !exist) {
-                            if (category in globalCatDict) {
-                                globalCatDict[category] += 1;
-                            } else {
-                                globalCatDict[category] = 1;
-                            }
-                        }
-                    }
                 }
-                
+
                 i += 1;
             }
             
-            // Process the last column in cluster
-            let patientID: string = 'null';
-            const metaData = dataState.colLabels[i]?.metadata;
-            if (metaData?.PatientId) {
-                patientID = metaData['PatientId'];
-            }
-            
-            if (patientID !== 'null' && !patientIdSet.has(patientID)) {
-                patientIdSet.add(patientID);
-                for (let j = 0; j < currentCat.length; j++) {
-                    const cat = currentCat[j];
-                    const category = dataState.colLabels[i].category?.[cat];
-                    
-                    if (category) {
-                        if (category in catDict) {
-                            catDict[category][0] += 1;
-                        } else {
-                            const color = dataState.colLabels[i].categoryColor?.[cat];
-                            catDict[category] = [1, color];
-                        }
-                    }
+            // Process the last column in cluster (same logic as inner loop)
+            {
+                const lastMetaData = dataState.colLabels[i]?.metadata;
+                let lastPatientID: string | null = null;
+                if (hasPatientIdentifier && patientIdKey && lastMetaData?.[patientIdKey]) {
+                    lastPatientID = lastMetaData[patientIdKey];
                 }
-            }
-            
-            // Sample-wise categories for last column
-            for (let j = 0; j < sampleWiseCategories.length; j++) {
-                const cat = sampleWiseCategories[j];
-                if (currentCat.includes(cat)) {
-                    const category = dataState.colLabels[i].category?.[cat];
-                    if (category) {
-                        if (category in catDict) {
-                            catDict[category][0] += 1;
-                        } else {
-                            const color = dataState.colLabels[i].categoryColor?.[cat];
-                            catDict[category] = [1, color];
-                        }
 
+                // Process each category for the last column
+                for (let j = 0; j < currentCat.length; j++) {
+                    const cat = currentCat[j];
+                    const category = dataState.colLabels[i].category?.[cat];
+                    if (!category) continue;
+
+                    const isSampleWise = isSampleWiseCategory(cat);
+
+                    let shouldCount = false;
+
+                    if (!hasPatientIdentifier) {
+                        shouldCount = true;
+                    } else if (isSampleWise) {
+                        shouldCount = true;
+                    } else if (lastPatientID && !patientIdSet.has(lastPatientID)) {
+                        shouldCount = true;
+                    }
+
+                    if (shouldCount) {
+                        if (category in catDict) {
+                            catDict[category][0] += 1;
+                        } else {
+                            const color = dataState.colLabels[i].categoryColor?.[cat];
+                            catDict[category] = [1, color];
+                        }
+                    }
+
+                    // Global category tracking
+                    if (!hasPatientIdentifier || isSampleWise) {
+                        if (category in globalCatDict) {
+                            globalCatDict[category] += 1;
+                        } else {
+                            globalCatDict[category] = 1;
+                        }
+                    } else if (lastPatientID && !allPatientsSet.has(lastPatientID)) {
                         if (category in globalCatDict) {
                             globalCatDict[category] += 1;
                         } else {
@@ -597,27 +647,20 @@ export function getClusterLayer(
                         }
                     }
                 }
-            }
-            
-            // Global patient tracking for last column
-            if (patientID !== 'null' && !allPatientsSet.has(patientID)) {
-                allPatientsSet.add(patientID);
-                for (let j = 0; j < currentCat.length; j++) {
-                    const cat = currentCat[j];
-                    const category = dataState.colLabels[i].category?.[cat];
-                    const exist = sampleWiseCategories.includes(cat);
-                    
-                    if (category && !exist) {
-                        if (category in globalCatDict) {
-                            globalCatDict[category] += 1;
-                        } else {
-                            globalCatDict[category] = 1;
-                        }
-                    }
+
+                // Track unique patients
+                if (lastPatientID && !patientIdSet.has(lastPatientID)) {
+                    patientIdSet.add(lastPatientID);
+                }
+                if (lastPatientID && !allPatientsSet.has(lastPatientID)) {
+                    allPatientsSet.add(lastPatientID);
                 }
             }
 
             nodes.push(dataState.colLabels[i].text);
+            
+            // Handle undefined group names at higher dendrogram levels
+            const clusterName = grp !== undefined ? String(grp) : `Cluster ${data.length + 1}`;
             
             data.push({
                 contour: [
@@ -626,7 +669,7 @@ export function getClusterLayer(
                     [xStart + (TrapezoidWidth * cellWidth), -yOffset + ht],
                     [xStart + (TrapezoidWidth * cellWidth) - 5, -yOffset],
                 ],
-                text: String(grp),
+                text: clusterName,
                 nodes: nodes,
                 category: catDict,
                 id: 'col-cluster',
@@ -642,18 +685,22 @@ export function getClusterLayer(
                 let pvalue: Record<string, number> = {};
                 for (const [key, value] of Object.entries(data[i].category)) {
                     let pval: number;
-                    const exist = sampleWiseCategories.includes(key.split(':')[0]);
-                    
-                    if (exist) {
+                    const categoryName = key.split(':')[0];
+                    const isSampleWise = isSampleWiseCategory(categoryName);
+
+                    if (!hasPatientIdentifier || isSampleWise) {
+                        // Sample-wise: use column count
                         const catNodes = value[0];
                         const numNodes = data[i].nodes.length;
                         const expectedProb = globalCatDict[key] / filteredNumColumns;
                         pval = numNodes ? binom_test(catNodes, numNodes, expectedProb) : 0;
                         pvalue[key] = pval;
                     } else {
+                        // Patient-wise: use patient count
                         const catNodes = value[0];
                         const numNodes = data[i].numPatients;
-                        const expectedProb = globalCatDict[key] / allPatientsSet.size;
+                        const totalPatients = allPatientsSet.size || 1; // Avoid division by zero
+                        const expectedProb = globalCatDict[key] / totalPatients;
                         pval = numNodes ? binom_test(catNodes, numNodes, expectedProb) : 0;
                         pvalue[key] = pval;
                     }
@@ -672,28 +719,37 @@ export function getClusterLayer(
         let i = startRow;
         const currentCat = order.rowCat;
         let globalCatDict: Record<string, number> = {};
-        const offsetY = heatmapHeight / 4;
+
+        // Generic centering calculation based on BASE_ZOOM
+        const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+        const labelSpaceCentering = labelWidth / 2 / baseScaleFactor;
+
+        // Always use heatmap (view) dimensions for centering
+        const offsetY = heatmapHeight / 2 / baseScaleFactor;
 
         while (i <= endRow) {
-            const ht = 5;
-            let xOffset: number;
-            if (order.rowCat.length === 0) {
-                xOffset = -labelWidth / 4 + ht + INITIAL_GAP;
-            } else {
-                xOffset = -labelWidth / 4 + order.rowCat.length * (CATEGORY_LAYER_HEIGHT + LAYER_GAP) + CATEGORY_LAYER_HEIGHT;
-            }
+            const ht = CLUSTER_LAYER_HEIGHT;
+
+            // Calculate xOffset to position cluster just left of the heatmap
+            // For now, use a simple offset like column clusters
+            // TODO: Account for labelSpaceCentering properly
+            // const xOffset = -CLUSTER_LAYER_HEIGHT;
+            const xOffset = -labelSpaceCentering + CLUSTER_LAYER_HEIGHT;
+
+
+
             
             // Calculate shifted position for cluster
             const newRowIndex = filteredIdxDict ? (i - filteredIdxDict.startY) : i;
             const firstAndLastPoint = [-xOffset, newRowIndex * cellHeight + cellHeight / 2];
             
-            const grp = dataState.rowLabels[i].group?.[sliderValue];
+            const grp = dataState.rowLabels[i].group?.[sliderValue - 1];
             let TrapezoidHeight = 1;
             const nodes: string[] = [];
             let catDict: Record<string, [number, string|null|undefined]> = {};
 
             // Process rows in the same cluster (within filtered range)
-            while ((i + 1 <= endRow) && (grp === dataState.rowLabels[i + 1].group?.[sliderValue])) {
+            while ((i + 1 <= endRow) && (grp === dataState.rowLabels[i + 1].group?.[sliderValue - 1])) {
                 TrapezoidHeight += 1;
                 nodes.push(dataState.rowLabels[i].text);
                 for (let j = 0; j < currentCat.length; j++) {
@@ -741,6 +797,9 @@ export function getClusterLayer(
 
             const secondPoint = [-xOffset, firstAndLastPoint[1] + TrapezoidHeight * cellHeight - cellHeight];
 
+            // Handle undefined group names at higher dendrogram levels
+            const clusterName = grp !== undefined ? String(grp) : `Cluster ${data.length + 1}`;
+
             data.push({
                 contour: [
                     [firstAndLastPoint[0], firstAndLastPoint[1] - offsetY],
@@ -748,7 +807,7 @@ export function getClusterLayer(
                     [ht - xOffset, secondPoint[1] + cellHeight / 2 - offsetY],
                     [ht - xOffset, firstAndLastPoint[1] - cellHeight / 2 - offsetY],
                 ],
-                text: String(grp),
+                text: clusterName,
                 nodes: nodes,
                 category: catDict,
                 id: 'row-cluster',
@@ -786,6 +845,15 @@ export function getClusterLayer(
       getLineColor: [211, 211, 211],
       getLineWidth: 0.5,
       autoHighlight: true,
+      onClick: (info, event) => {
+        if (info.object && onClick) {
+          // Call the onClick handler
+          onClick(info, event);
+          // Return true to consume the event and prevent propagation
+          return true;
+        }
+        return false;
+      },
       transitions: {
         getFillColor: {
           type: 'interpolation',

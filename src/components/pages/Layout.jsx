@@ -73,7 +73,7 @@ function Layout() {
         <nav className="nav-menu">
           <Link to="/" className={`nav-link ${location.pathname === "/" ? "active" : ""}`}>Home</Link>
           <Link to="/example" className={`nav-link ${location.pathname === "/example" ? "active" : ""}`}>Examples</Link>
-          <a href="https://gumuslab.github.io/ClusterChirpDocs/intro" target="_blank" rel="noopener noreferrer" className="nav-link">FAQ</a>
+          <a href="https://gumuslab.github.io/ClusterChirpDocs/intro" target="_blank" rel="noopener noreferrer" className="nav-link">Tutorial/FAQ</a>
     
           {/* <Link to="/example" className={`nav-link ${location.pathname === "/example" ? "active" : ""}`}>Examples</Link> */}
           <Link to="/contact" className={`nav-link ${location.pathname === "/contact" ? "active" : ""}`}>Contact</Link>

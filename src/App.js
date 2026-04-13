@@ -31,7 +31,9 @@ function App() {
   // }, []);
 
   return (
+    // <Router  basename="/clusterchirp-test">
     <Router>
+
       {/* <PageTracker /> */}
       <Routes>
         <Route path='/' element={<Layout/>}>

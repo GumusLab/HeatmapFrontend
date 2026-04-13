@@ -1,6 +1,7 @@
 
 import Box from "@mui/material/Box";
 import Slider from "@mui/material/Slider";
+import Typography from "@mui/material/Typography";
 import {HEATMAP_WIDTH} from "../const"
 import * as React from "react";
 
@@ -29,13 +30,32 @@ export default function CustomSlider({ direction="horizontal",setClusterValue,wi
   return (
     <Box
       sx={{
-        width: direction === 'vertical'?"20px":"100px",
-        height: direction === 'vertical'?"100px":"20px",
+        width: direction === 'vertical'?"50px":"120px",
+        height: direction === 'vertical'?"135px":"55px",
         position: "absolute",
-        top: direction === "vertical"?`${0}%`:"90%",
-        left: direction === 'vertical'?`${98}%`:`${width}px`
+        top: direction === "vertical"?"15px":"90%",
+        left: direction === 'vertical'?`${97.5}%`:`${width}px`,
+        display: 'flex',
+        flexDirection: direction === 'vertical' ? 'row' : 'column',
+        alignItems: 'center',
       }}
     >
+      {/* Vertical slider: "Coarse" label at top */}
+      {direction === 'vertical' && (
+        <Typography
+          sx={{
+            fontSize: '11px',
+            fontWeight: 'bold',
+            color: '#555',
+            position: 'absolute',
+            top: '-14px',
+            left: '0px',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Coarse
+        </Typography>
+      )}
       <Slider
         orientation={direction}
         value={value}
@@ -82,6 +102,38 @@ export default function CustomSlider({ direction="horizontal",setClusterValue,wi
           },
         }}
       />
+      {/* Legend below slider */}
+      {direction === 'horizontal' ? (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            width: '100px',
+            marginTop: '2px',
+          }}
+        >
+          <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#555', marginLeft: '-8px' }}>
+            Coarse
+          </Typography>
+          <Typography sx={{ fontSize: '11px', fontWeight: 'bold', color: '#555' }}>
+            Fine
+          </Typography>
+        </Box>
+      ) : (
+        <Typography
+          sx={{
+            fontSize: '11px',
+            fontWeight: 'bold',
+            color: '#555',
+            position: 'absolute',
+            bottom: '18px',
+            left: '3px',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Fine
+        </Typography>
+      )}
     </Box>
   );
 }

@@ -1,7 +1,7 @@
 import type { InteractionState } from '@deck.gl/core/typed/controllers/controller';
 import { clamp, isNil, merge } from 'lodash';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BASE_ZOOM, IDS, MAX_ZOOM, HEATMAP_WIDTH, HEATMAP_HEIGHT } from '../const';
+import { BASE_ZOOM, IDS, MAX_ZOOM, HEATMAP_WIDTH, HEATMAP_HEIGHT, HEATMAP_PARENT_HEIGHT_RATIO } from '../const';
 import type {
   DataStateShape,
   HeatmapStateShape,
@@ -24,6 +24,13 @@ const Y = 1;
 const easeInOutCubic = (t: number): number => 
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
+interface CropBox {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
+
 export const useViewStates = (
   container: HTMLDivElement | null,
   dimensions: [number, number] | null,
@@ -31,14 +38,38 @@ export const useViewStates = (
   dataState: DataStateShape | null,
   panelWidth: number,
   searchTerm?: string,
-  colLabelsWidth?: number
+  colLabelsWidth?: number,
+  filteredIdxDict?: CropBox | null
 ) => {
-  const [visibleIndices, setVisibleIndices] = useState<number[] | null>(null);
+  const [visibleBounds, setVisibleBounds] = useState<{startRow: number, endRow: number, startCol: number, endCol: number} | null>(null);
   const [isSearchZooming, setIsSearchZooming] = useState(false);
   const [isZoomedOut, setIsZoomedOut] = useState(false);
 
   const animationRef = useRef<number | null>(null);
   const viewStateRef = useRef<any|null>(null);
+  const boundsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingBoundsRef = useRef<{startRow: number, endRow: number, startCol: number, endCol: number} | null>(null);
+
+  // Debounced visible bounds update — avoids layer recreation on every zoom frame.
+  // Only triggers a React state update (and thus layer recreation) when bounds actually change
+  // meaningfully, or after zoom/pan settles.
+  const debouncedSetVisibleBounds = useCallback((bounds: {startRow: number, endRow: number, startCol: number, endCol: number}) => {
+    pendingBoundsRef.current = bounds;
+    if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
+    boundsTimerRef.current = setTimeout(() => {
+      setVisibleBounds(prev => {
+        const next = pendingBoundsRef.current;
+        if (!next) return prev;
+        // Only update if bounds actually changed
+        if (prev && prev.startRow === next.startRow && prev.endRow === next.endRow &&
+            prev.startCol === next.startCol && prev.endCol === next.endCol) {
+          return prev;
+        }
+        return next;
+      });
+      boundsTimerRef.current = null;
+    }, 50); // 50ms — fast enough to feel responsive, slow enough to batch zoom frames
+  }, []);
 
 
   const initialViewState = useMemo(
@@ -58,8 +89,9 @@ export const useViewStates = (
       
       // Calculate actual heatmap dimensions
       const availableWidth = dimensions[0] - panelWidth;
-      const heatmapWidth = availableWidth * HEATMAP_WIDTH / 100; 
-      const heatmapHeight = dimensions[1] * HEATMAP_HEIGHT / 100;
+      const heatmapWidth = availableWidth * HEATMAP_WIDTH / 100;
+      // Account for HEATMAP_PARENT_HEIGHT_RATIO (parent container is only 90% of full height)
+      const heatmapHeight = dimensions[1] * HEATMAP_PARENT_HEIGHT_RATIO / 100 * HEATMAP_HEIGHT / 100;
       
       return {
         target: [0, 0],
@@ -104,8 +136,6 @@ export const useViewStates = (
     //   zoom: viewStates[IDS.VIEWS.HEATMAP_GRID].zoom as number
     // };
 
-    console.log("********* Hola I am in the animate ViewState function *********")
-
     const startState = {
       target: [...currentState[IDS.VIEWS.HEATMAP_GRID].target],
       zoom: currentState[IDS.VIEWS.HEATMAP_GRID].zoom as number
@@ -125,10 +155,6 @@ export const useViewStates = (
       const zoom = startState.zoom + (targetZoom - startState.zoom) * easedT;
       const newTargetX = startX + (targetX - startX) * easedT;
       const newTargetY = startY + (targetY - startY) * easedT;
-
-      console.log("********* newTargetX is as follows *********",newTargetX)
-      console.log("********* newTargetY is as follows *********",newTargetY)
-
 
       setViewStates((current) => ({
         [IDS.VIEWS.COL_LABELS]: {
@@ -163,11 +189,14 @@ export const useViewStates = (
     // }
   }, []);
 
-  // Clean up animation on unmount
+  // Clean up animation and debounce timer on unmount
   useEffect(() => {
     return () => {
       if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
+      }
+      if (boundsTimerRef.current !== null) {
+        clearTimeout(boundsTimerRef.current);
       }
     };
   }, []);
@@ -228,10 +257,11 @@ useEffect(() => {
       // Get heatmap dimensions for offset calculation
       const heatmapWidth = heatmapState.width;
       const heatmapHeight = heatmapState.height;
-      
-      // Calculate the offset used in the viewport coordinates
-      const offsetX = heatmapWidth / 4;
-      const offsetY = heatmapHeight / 4;
+
+      // Calculate the offset used in the viewport coordinates (generalistic based on BASE_ZOOM)
+      const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+      const offsetX = heatmapWidth / 2 / baseScaleFactor;
+      const offsetY = heatmapHeight / 2 / baseScaleFactor;
       
       // Calculate centerY based on cell positions in the grid
       // Remove the factor of 2 and properly account for the viewport offset
@@ -279,80 +309,39 @@ useEffect(() => {
 
 
   useEffect(() => {
-    console.log('🔥 FIRST useEffect TRIGGERED - Initial visibleIndices calculation');
-    console.log('🔥 Dependencies:', {
-      heatmapState: !!heatmapState,
-      dataState: !!dataState,
-      dimensions: !!dimensions,
-      heatmapStateWidth: heatmapState?.width || 0,
-      heatmapStateHeight: heatmapState?.height || 0,
-      dataStateTimestamp: Date.now()
-    });
-    
     if (heatmapState && dataState && dimensions) {
-
-      console.log('********* heatmapState?.cellDimensions is as follows *********',heatmapState?.cellDimensions)
-        console.log('🔥 CALCULATING INITIAL VISIBLE INDICES (BASE ZOOM)');
-        
-        // --- This part remains the same ---
+        // --- Calculate offsets generically based on BASE_ZOOM ---
         const { width: cellWidth, height: cellHeight } = heatmapState.cellDimensions;
         const { numColumns, numRows } = dataState;
-        const offsetX = heatmapState.width / 4;
-        const offsetY = heatmapState.height / 4;
+        const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+        const offsetX = heatmapState.width / 2 / baseScaleFactor;
+        const offsetY = heatmapState.height / 2 / baseScaleFactor;
         const visibleArea = {
-            minX: -heatmapState.width / 4,
-            minY: -heatmapState.height / 4,
-            maxX: heatmapState.width / 4,
-            maxY: heatmapState.height / 4
+            minX: -offsetX,
+            minY: -offsetY,
+            maxX: offsetX,
+            maxY: offsetY
         };
-
-        console.log('🔥 Initial calculation params:', {
-          cellWidth, cellHeight, numColumns, numRows,
-          offsetX, offsetY, visibleArea
-        });
-
-        // --- START: OPTIMIZATION ---
 
         // 1. Calculate the visible range of row and column INDICES from the visibleArea coordinates.
         // We use Math.floor for the start and Math.ceil for the end to ensure we cover partial cells.
         const startCol = Math.max(0, Math.floor((visibleArea.minX + offsetX) / cellWidth));
         const endCol = Math.min(numColumns - 1, Math.ceil((visibleArea.maxX + offsetX) / cellWidth));
-        
+
         const startRow = Math.max(0, Math.floor((visibleArea.minY + offsetY) / cellHeight));
         const endRow = Math.min(numRows - 1, Math.ceil((visibleArea.maxY + offsetY) / cellHeight));
-        
-        console.log('🔥 Calculated ranges:', {
-          startCol, endCol, startRow, endRow
-        });
-        
-        // 2. Build the array of visible indices directly from the calculated range.
-        //    This avoids iterating through millions of cells.
-        const newVisibleIndices = [];
-        // This assumes the flat `cellData` array is sorted by row, then by column (row-major).
-        for (let r = startRow; r <= endRow; r++) {
-            // The starting index in the flat array for the current row `r`.
-            const rowStartIndex = r * numColumns;
-            for (let c = startCol; c <= endCol; c++) {
-                // The index for the cell at (r, c) is simply its position in the sorted grid.
-                const cellIndex = rowStartIndex + c;
-                newVisibleIndices.push(cellIndex);
-            }
-        }
-        
-        console.log('🔥 NEW VISIBLE INDICES FROM FIRST useEffect:', {
-          count: newVisibleIndices.length,
-          first10: newVisibleIndices.slice(0, 10),
-          last10: newVisibleIndices.slice(-10)
-        });
-        
-        setVisibleIndices(newVisibleIndices);
-        console.log('🔥 FIRST useEffect COMPLETED - visibleIndices set');
 
-        // --- END: OPTIMIZATION ---
-    } else {
-        console.log('🔥 FIRST useEffect SKIPPED - missing dependencies');
+        // Set visibleBounds - this is what the scatter layer uses for viewport culling
+        setVisibleBounds({ startRow, endRow, startCol, endCol });
     }
-}, [heatmapState?.cellDimensions?.width, heatmapState?.cellDimensions?.height]);
+}, [
+  heatmapState?.cellDimensions?.width,
+  heatmapState?.cellDimensions?.height,
+  dataState?.numRows,      // Re-run when data size changes (e.g., after reset)
+  dataState?.numColumns,   // Re-run when data size changes (e.g., after reset)
+  heatmapState?.width,     // Re-run when heatmap dimensions change
+  heatmapState?.height
+]);
 
 
 
@@ -386,41 +375,84 @@ const onViewStateChange = useCallback(
     if (heatmapState && dataState && dimensions) {
       const cellW = heatmapState.cellDimensions.width;
       const cellH = heatmapState.cellDimensions.height;
-      const dataW = dataState.numColumns * cellW;
-      const dataH = dataState.numRows    * cellH;
+
+      // When cropping, use cropped dimensions for constraints
+      const numCols = filteredIdxDict
+        ? (filteredIdxDict.endX - filteredIdxDict.startX + 1)
+        : dataState.numColumns;
+      const numRows = filteredIdxDict
+        ? (filteredIdxDict.endY - filteredIdxDict.startY + 1)
+        : dataState.numRows;
+
+      const dataW = numCols * cellW;
+      const dataH = numRows * cellH;
 
       // Calculate how big the viewport is in world‐space
       const scale = 2 ** (viewState.zoom - BASE_ZOOM);
       const viewW = heatmapState.width  / scale;
       const viewH = heatmapState.height / scale;
-      const halfW = viewW / 4;  // because your offset logic divides by 4
-      const halfH = viewH / 4;
 
-      const offsetX = heatmapState.width  / 4;
-      const offsetY = heatmapState.height / 4;
+      // Generic calculation based on BASE_ZOOM
+      const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+      const halfW = viewW / 2 / baseScaleFactor;
+      const halfH = viewH / 2 / baseScaleFactor;
+
+      const offsetX = heatmapState.width  / 2 / baseScaleFactor;
+      const offsetY = heatmapState.height / 2 / baseScaleFactor;
 
       const minX = -offsetX + halfW;
       const minY = -offsetY + halfH;
       const maxX =  dataW    - offsetX - halfW;
-      const maxY =  dataH    - offsetY - halfH + 17; // your +17 hack
+      const maxY =  dataH    - offsetY - halfH;
 
+      // Calculate what world coordinates are visible at current target
+      const visibleLeft = viewState.target[0] - halfW;
+      const visibleRight = viewState.target[0] + halfW;
+      const visibleTop = viewState.target[1] - halfH;
+      const visibleBottom = viewState.target[1] + halfH;
+
+      // Data bounds in world coordinates
+      const dataLeft = -offsetX;
+      const dataRight = dataW - offsetX;
+      const dataTop = -offsetY;
+      const dataBottom = dataH - offsetY;
+
+      // Last column position (using cropped numCols)
+      const lastColCenter = (numCols - 1) * cellW + cellW/2 - offsetX;
+      const lastColRightEdge = lastColCenter + cellW/2;
+
+      // Last row position (using cropped numRows)
+      const lastRowCenter = (numRows - 1) * cellH + cellH/2 - offsetY;
+      const lastRowBottomEdge = lastRowCenter + cellH/2;
+
+      // Get column labels (accounting for crop)
+      const colLabels = dataState.colLabels || [];
+      const startColIdx = filteredIdxDict ? filteredIdxDict.startX : 0;
+      const endColIdx = filteredIdxDict ? filteredIdxDict.endX : colLabels.length - 1;
+      const firstColName = colLabels[startColIdx]?.text || 'N/A';
+      const lastColName = colLabels[endColIdx]?.text || 'N/A';
+
+      // Get row labels (accounting for crop)
       viewState.target = [
         clamp(viewState.target[0], minX, maxX),
         clamp(viewState.target[1], minY, maxY)
       ];
     }
 
-    // 5) Recompute visibleIndices for the new viewState
+    // 5) Recompute visibleBounds for the new viewState
     if (viewId === IDS.VIEWS.HEATMAP_GRID && heatmapState && dataState && dimensions) {
       const { width: cellW, height: cellH } = heatmapState.cellDimensions;
       const { numColumns, numRows } = dataState;
       const scale = 2 ** (viewState.zoom - BASE_ZOOM);
       const viewW = heatmapState.width  / scale;
       const viewH = heatmapState.height / scale;
-      const halfW = viewW / 4;
-      const halfH = viewH / 4;
-      const offsetX = heatmapState.width  / 4;
-      const offsetY = heatmapState.height / 4;
+
+      // Generic calculation based on BASE_ZOOM
+      const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+      const halfW = viewW / 2 / baseScaleFactor;
+      const halfH = viewH / 2 / baseScaleFactor;
+      const offsetX = heatmapState.width  / 2 / baseScaleFactor;
+      const offsetY = heatmapState.height / 2 / baseScaleFactor;
 
       const area = {
         minX: viewState.target[0] - halfW,
@@ -429,18 +461,32 @@ const onViewStateChange = useCallback(
         maxY: viewState.target[1] + halfH,
       };
 
-      const startCol = clamp(Math.floor((area.minX + offsetX) / cellW), 0, numColumns - 1);
-      const endCol   = clamp(Math.ceil ((area.maxX + offsetX) / cellW), 0, numColumns - 1);
-      const startRow = clamp(Math.floor((area.minY + offsetY) / cellH), 0, numRows    - 1);
-      const endRow   = clamp(Math.ceil ((area.maxY + offsetY) / cellH), 0, numRows    - 1);
+      // Calculate visible bounds in the CURRENT coordinate system (which may be cropped)
+      // These are "adjusted" indices (0-based within the visible/cropped area)
+      const adjustedStartCol = clamp(Math.floor((area.minX + offsetX) / cellW), 0, numColumns - 1);
+      const adjustedEndCol   = clamp(Math.ceil ((area.maxX + offsetX) / cellW), 0, numColumns - 1);
+      const adjustedStartRow = clamp(Math.floor((area.minY + offsetY) / cellH), 0, numRows    - 1);
+      const adjustedEndRow   = clamp(Math.ceil ((area.maxY + offsetY) / cellH), 0, numRows    - 1);
 
-      const newVisible: number[] = [];
-      for (let r = startRow; r <= endRow; r++) {
-        for (let c = startCol; c <= endCol; c++) {
-          newVisible.push(r * numColumns + c);
-        }
+      // When filtering is active, translate adjusted indices back to ORIGINAL data indices
+      // The scatter layer expects original indices to look up values from the original data arrays
+      let startCol: number, endCol: number, startRow: number, endRow: number;
+
+      if (filteredIdxDict) {
+        // Add the filter offset to get original indices
+        startCol = clamp(adjustedStartCol + filteredIdxDict.startX, filteredIdxDict.startX, filteredIdxDict.endX);
+        endCol   = clamp(adjustedEndCol + filteredIdxDict.startX, filteredIdxDict.startX, filteredIdxDict.endX);
+        startRow = clamp(adjustedStartRow + filteredIdxDict.startY, filteredIdxDict.startY, filteredIdxDict.endY);
+        endRow   = clamp(adjustedEndRow + filteredIdxDict.startY, filteredIdxDict.startY, filteredIdxDict.endY);
+      } else {
+        startCol = adjustedStartCol;
+        endCol = adjustedEndCol;
+        startRow = adjustedStartRow;
+        endRow = adjustedEndRow;
       }
-      setVisibleIndices(newVisible);
+
+      // Store bounds - debounced to avoid layer recreation on every zoom frame
+      debouncedSetVisibleBounds({ startRow, endRow, startCol, endCol });
     }
 
     // 6) Finally, push all three viewStates back into React state
@@ -466,7 +512,9 @@ const onViewStateChange = useCallback(
     heatmapState,
     dataState,
     dimensions,
-    isSearchZooming
+    isSearchZooming,
+    filteredIdxDict,  // Add this so pan constraints update when crop changes
+    debouncedSetVisibleBounds
   ]
 );
 
@@ -650,5 +698,26 @@ const onViewStateChange = useCallback(
 //     [dataState, heatmapState, dimensions, isSearchZooming]
 //   );
 
-  return { viewStates, onViewStateChange, visibleIndices, isZoomedOut };
+  // Function to reset view to origin (useful after cropping)
+  const resetViewToOrigin = useCallback(() => {
+    setViewStates((current) => ({
+      [IDS.VIEWS.COL_LABELS]: {
+        ...current[IDS.VIEWS.COL_LABELS],
+        target: [0, 0],
+        zoom: [BASE_ZOOM, BASE_ZOOM],
+      },
+      [IDS.VIEWS.ROW_LABELS]: {
+        ...current[IDS.VIEWS.ROW_LABELS],
+        target: [0, 0],
+        zoom: [BASE_ZOOM, BASE_ZOOM],
+      },
+      [IDS.VIEWS.HEATMAP_GRID]: {
+        ...current[IDS.VIEWS.HEATMAP_GRID],
+        target: [0, 0],
+        zoom: BASE_ZOOM,
+      },
+    }));
+  }, []);
+
+  return { viewStates, onViewStateChange, visibleBounds, isZoomedOut, resetViewToOrigin };
 };

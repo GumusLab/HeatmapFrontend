@@ -82,7 +82,7 @@
 
 
 import { OrthographicController, OrthographicView } from '@deck.gl/core/typed';
-import { IDS,HEATMAP_WIDTH,HEATMAP_HEIGHT } from '../const';
+import { IDS, HEATMAP_WIDTH, HEATMAP_HEIGHT, HEATMAP_PARENT_HEIGHT_RATIO } from '../const';
 
 export type UseViewsProps = {
   debug: boolean;
@@ -103,7 +103,8 @@ export const useViews = ({
   if (!(dimensions && rowLabelsWidth && colLabelsWidth)) return [];
 
   const availableWidth = (dimensions[0] - panelWidth)*HEATMAP_WIDTH/100;
-  const availableHeight = (dimensions[1])*HEATMAP_HEIGHT/100;
+  // Account for HEATMAP_PARENT_HEIGHT_RATIO (parent container is only 90% of full height)
+  const availableHeight = (dimensions[1]) * HEATMAP_PARENT_HEIGHT_RATIO / 100 * HEATMAP_HEIGHT / 100;
 
   const heatmapWidth = availableWidth - rowLabelsWidth;
   const heatmapHeight = availableHeight - colLabelsWidth;
@@ -149,6 +150,16 @@ export const useViews = ({
         }
       : {}),
   });
+  console.log('🖼️ View dimensions:', {
+    heatmapWidth,
+    heatmapHeight,
+    labelWidth,
+    labelHeight,
+    availableWidth,
+    availableHeight,
+    dimensions
+  });
+
   const heatmapGridView = new OrthographicView({
     id: IDS.VIEWS.HEATMAP_GRID,
     width: heatmapWidth,

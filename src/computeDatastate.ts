@@ -22,9 +22,10 @@ function applyRegularSorting(
   switch (order.row) {
     case 'sum':
       rowIndices.sort((a, b) => {
-        const sumA = colIndices.reduce((acc, colIdx) => acc + (jsonData.mat[a][colIdx] || 0), 0);
-        const sumB = colIndices.reduce((acc, colIdx) => acc + (jsonData.mat[b][colIdx] || 0), 0);
-        return sumB - sumA;
+        // Use pre-calculated rank from backend (higher rank = higher sum)
+        const rankA = jsonData.row_nodes[a]?.rank ?? 0;
+        const rankB = jsonData.row_nodes[b]?.rank ?? 0;
+        return rankB - rankA; // Descending order (highest sum first)
       });
       break;
     case 'alphabetically':
@@ -32,9 +33,10 @@ function applyRegularSorting(
       break;
     case 'variance':
       rowIndices.sort((a, b) => {
-        const rowDataA = colIndices.map(colIdx => jsonData.mat[a][colIdx]);
-        const rowDataB = colIndices.map(colIdx => jsonData.mat[b][colIdx]);
-        return calculateVariance(rowDataB) - calculateVariance(rowDataA);
+        // Use pre-calculated rankvar from backend (higher rankvar = higher variance)
+        const rankvarA = jsonData.row_nodes[a]?.rankvar ?? 0;
+        const rankvarB = jsonData.row_nodes[b]?.rankvar ?? 0;
+        return rankvarB - rankvarA; // Descending order (highest variance first)
       });
       break;
     case 'cluster':
@@ -48,9 +50,10 @@ function applyRegularSorting(
   switch (order.col) {
     case 'sum':
       colIndices.sort((a, b) => {
-        const sumA = rowIndices.reduce((acc, rowIdx) => acc + (jsonData.mat[rowIdx][a] || 0), 0);
-        const sumB = rowIndices.reduce((acc, rowIdx) => acc + (jsonData.mat[rowIdx][b] || 0), 0);
-        return sumB - sumA;
+        // Use pre-calculated rank from backend (higher rank = higher sum)
+        const rankA = jsonData.col_nodes[a]?.rank ?? 0;
+        const rankB = jsonData.col_nodes[b]?.rank ?? 0;
+        return rankB - rankA; // Descending order (highest sum first)
       });
       break;
     case 'alphabetically':
@@ -58,9 +61,10 @@ function applyRegularSorting(
       break;
     case 'variance':
       colIndices.sort((a, b) => {
-        const colDataA = rowIndices.map(rowIdx => jsonData.mat[rowIdx][a]);
-        const colDataB = rowIndices.map(rowIdx => jsonData.mat[rowIdx][b]);
-        return calculateVariance(colDataB) - calculateVariance(colDataA);
+        // Use pre-calculated rankvar from backend (higher rankvar = higher variance)
+        const rankvarA = jsonData.col_nodes[a]?.rankvar ?? 0;
+        const rankvarB = jsonData.col_nodes[b]?.rankvar ?? 0;
+        return rankvarB - rankvarA; // Descending order (highest variance first)
       });
       break;
     case 'cluster':
@@ -85,14 +89,39 @@ function applyCategorySorting(
     let indexStringArray = indexName.split("-");
     indexStringArray.push('index');
     let idxString = indexStringArray.join("_");
-    
+
     colIndices.sort((a, b) => (jsonData.col_nodes[a][idxString] || 0) - (jsonData.col_nodes[b][idxString] || 0));
   }
-  
+
   // Row category sorting
   if (order.sortByRowCat.trim().length > 0) {
     const indexName = categories.row[order.sortByRowCat];
-    rowIndices.sort((a, b) => (jsonData.row_nodes[a][indexName] || 0) - (jsonData.row_nodes[b][indexName] || 0));
+    let indexStringArray = indexName.split("-");
+    indexStringArray.push('index');
+    let idxString = indexStringArray.join("_");
+
+    rowIndices.sort((a, b) => (jsonData.row_nodes[a][idxString] || 0) - (jsonData.row_nodes[b][idxString] || 0));
+  }
+
+  // Sort columns by a specific row's values
+  if (order.sortColsByRowName !== null && order.sortColsByRowName !== undefined && order.sortColsByRowName.trim().length > 0) {
+    console.log('🔍 Sorting columns by row name:', order.sortColsByRowName);
+    // Find the row index in the original data by matching the row name
+    const rowIndex = jsonData.row_nodes.findIndex((node: any) => node.name === order.sortColsByRowName);
+    console.log('📊 Found row index:', rowIndex, 'for row name:', order.sortColsByRowName);
+
+    if (rowIndex !== -1) {
+      console.log('✅ Sorting columns by row values at index', rowIndex);
+      colIndices.sort((a, b) => {
+        // Get the values for this row at columns a and b
+        const valueA = jsonData.mat[rowIndex]?.[a] ?? 0;
+        const valueB = jsonData.mat[rowIndex]?.[b] ?? 0;
+        return valueB - valueA; // Descending order (highest values first)
+      });
+      console.log('✅ Column sorting complete');
+    } else {
+      console.error('❌ Row not found in data:', order.sortColsByRowName);
+    }
   }
 }
 
@@ -256,7 +285,11 @@ function sortData(
     
     if(order.sortByRowCat.trim().length > 0) {
       const indexName = categories.row[order.sortByRowCat];
-      const rowNodes: [string, number][] = jsonData.row_nodes.map((d:any) => [d.name, d[indexName]]);
+      let indexStringArray = indexName.split("-");
+      indexStringArray.push('index');
+      let idxString = indexStringArray.join("_");
+
+      const rowNodes: [string, number][] = jsonData.row_nodes.map((d:any) => [d.name, d[idxString]]);
       const sortedRows = rowNodes.sort((a, b) => a[1] - b[1]);
 
       if(Object.keys(sortedDataCat).length > 0) {
@@ -295,13 +328,11 @@ function sortData(
 /**
  * Pure function that computes the data state from the given JSON data,
  * order, and categories.
+ *
+ * Crop functionality:
+ * - croppedRowIndices/croppedColIndices: Arrays of ORIGINAL indices to include
+ *   (converted from visual indices on main thread using sortedRowIndices/sortedColIndices)
  */
-// interface filteredIdxDict {
-//   startX: number;
-//   startY: number;
-//   endX: number;
-//   endY: number;
-// }
 export function computeDataState(
   jsonData: any,
   order: {
@@ -311,9 +342,11 @@ export function computeDataState(
     sortByRowCat: string;
     colCat: string[];
     sortByColCat: string;
+    sortColsByRowName: string | null;
   },
   categories: { row: { [key: string]: string }; col: { [key: string]: string } },
-  // filteredIdxDict:filteredIdxDict|null
+  croppedRowIndices?: number[] | null,
+  croppedColIndices?: number[] | null
 ): DataStateShape | null {
   if (!jsonData || !jsonData.mat || !jsonData.mat.length) return null;
 
@@ -335,35 +368,40 @@ export function computeDataState(
   // let transformedData = transformClustergrammerData(jsonData);
   let transformedData = null;
 
-  // Create arrays of row and column indices instead of nested objects
-  const numRows = jsonData.row_nodes.length;
-  const numColumns = jsonData.col_nodes.length;
-  let rowIndices = Array.from({ length: numRows }, (_, i) => i);
-  let colIndices = Array.from({ length: numColumns }, (_, i) => i);
+  // Determine the indices to process
+  const totalRows = jsonData.row_nodes.length;
+  const totalCols = jsonData.col_nodes.length;
 
-  
+  // If cropped indices are provided, use them directly (they are already ORIGINAL indices)
+  // Otherwise, use all indices
+  let rowIndices: number[];
+  let colIndices: number[];
 
+  if (croppedRowIndices && croppedRowIndices.length > 0) {
+    // Use the provided original indices (from visual selection)
+    rowIndices = [...croppedRowIndices];
+  } else {
+    // Use all rows
+    rowIndices = Array.from({ length: totalRows }, (_, i) => i);
+  }
 
-  // Sort the data based on the provided order and node maps
-  // transformedData = sortData(transformedData, order, jsonData, rowNodeMap, colNodeMap);
+  if (croppedColIndices && croppedColIndices.length > 0) {
+    // Use the provided original indices (from visual selection)
+    colIndices = [...croppedColIndices];
+  } else {
+    // Use all columns
+    colIndices = Array.from({ length: totalCols }, (_, i) => i);
+  }
 
-  // Check if we need category-based sorting
-// const needsCategorySorting = order.sortByRowCat.trim().length > 0 || order.sortByColCat.trim().length > 0;
-
-// if (needsCategorySorting) {
-//   // Apply category-based sorting directly
-//   transformedData = sortByCat(transformedData, order, jsonData, categories);
-// } else {
-//   // Apply regular sorting if no category sorting is needed
-//   transformedData = sortData(transformedData, order, jsonData, rowNodeMap, colNodeMap);
-// }
-
+  const numRows = rowIndices.length;
+  const numColumns = colIndices.length;
 
 // Apply sorting to indices instead of creating nested objects
-const needsCategorySorting = order.sortByRowCat.trim().length > 0 || order.sortByColCat.trim().length > 0;
+const needsCategorySorting = order.sortByRowCat.trim().length > 0 ||
+                              order.sortByColCat.trim().length > 0 ||
+                              (order.sortColsByRowName !== null && order.sortColsByRowName !== undefined && order.sortColsByRowName.trim().length > 0);
 
 if (needsCategorySorting) {
-  // Apply category-based sorting to indices
   applyCategorySorting(rowIndices, colIndices, order, jsonData, categories);
 } else {
   // Apply regular sorting to indices
@@ -479,5 +517,9 @@ const rowLabels = rowIndices.map((rowIdx, i) => {
     numColumns,
     colLabels,
     rowLabels,
+    // Store the sorted indices mapping: visualPosition -> originalIndex
+    // This is used by the crop functionality to convert visual selection to original data indices
+    sortedRowIndices: rowIndices,
+    sortedColIndices: colIndices,
   };
 }

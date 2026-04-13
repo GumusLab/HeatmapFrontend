@@ -102,6 +102,8 @@ const ChatBox: React.FC<ChatInputProps> = ({
     selection: ["Select top 20 most variant genes", "Select top 100 variant rows"],
     sorting: ["Sort rows by variance", "Sort columns by sum", "Sort by sex"],
     clustering: ["Cluster the genes", "Cluster the rows", "Cluster columns"],
+    normalization: ["zscore: rows", "zscore: cols"],
+    distance: ["Use euclidean distance", "Use cosine distance", "Use correlation distance", "Use manhattan distance"],
     search: ["Search for C4BPA", "Find gene CCL2"],
     visualization: ["Make it dark", "Make it light", "Set opacity to 0.8"]
   };

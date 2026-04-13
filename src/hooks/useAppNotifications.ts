@@ -34,9 +34,12 @@ export const useAppNotifications = (): AppNotificationHook => {
     const id = Date.now();
     const newNotification: Notification = { id, timestamp: new Date(), ...notification };
     setNotifications(prev => [newNotification, ...prev]); // Prepend for visibility
-    
+
     if (notification.autoHide !== false) {
-      setTimeout(() => removeNotification(id), notification.duration || 7000);
+      // Inline the removal to avoid stale closure issues
+      setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      }, notification.duration || 7000);
     }
     return id;
   };

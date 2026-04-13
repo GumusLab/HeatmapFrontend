@@ -327,7 +327,7 @@ export const NetworkNotificationSystem: React.FC<NetworkNotificationSystemProps>
               <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '14px' }}>
                 {notification.title}
               </div>
-              <div style={{ fontSize: '13px', lineHeight: '1.4' }}>
+              <div style={{ fontSize: '13px', lineHeight: '1.4', whiteSpace: 'pre-line' }}>
                 {notification.message}
               </div>
               

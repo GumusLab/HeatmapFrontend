@@ -143,6 +143,7 @@ export interface DeckGLHeatmapProps {
   hideLoading:any;
   addNotification:any;
 
+  onStatsUpdate?: (stats: { sampleSize: number; dataPoints: number }) => void;
 
   /*P vlaue json for results files */
   pvalData?:Record<string, Record<string, number>>;

@@ -1,23 +1,36 @@
-// https://medium.com/code-well-live-forever/dry-up-your-api-requests-b4337049a2c1
 // handleError.js - Common Error Handler Function
+// Re-throws with a user-friendly message so callers can display it
 export default (error: any) => {
-  const { status, message } = error;
+  const status = error?.response?.status;
+  const serverMessage = error?.response?.data?.error || error?.response?.data?.message;
+  let userMessage: string;
+
   switch (status) {
     case 401:
-      // do something when you're unauthenticated
-      console.error("Status 401, unauthenticated request");
+      userMessage = "Authentication required. Please log in and try again.";
       break;
     case 403:
-      // do something when you're unauthorized to access a resource
-      console.error("Status 403, unauthorized request");
+      userMessage = "You don't have permission to perform this action.";
+      break;
+    case 404:
+      userMessage = serverMessage || "The requested resource was not found on the server.";
       break;
     case 500:
-      // do something when your server exploded
-      console.error("Status 500, internal server error");
+      userMessage = serverMessage || "Internal server error. Please try again later.";
+      break;
+    case 503:
+      userMessage = serverMessage || "Service unavailable. Please try again later.";
       break;
     default:
-      // handle normal errors with some alert or whatever
-      console.error("operation failed");
+      if (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error') {
+        userMessage = "Cannot connect to the server. Please check that the backend is running.";
+      } else {
+        userMessage = serverMessage || error?.message || "An unexpected error occurred.";
+      }
   }
-  return message; // I like to get my error message back
+
+  console.error(`API Error (${status || 'network'}):`, userMessage, error);
+
+  // Re-throw so callers can catch and show notifications
+  throw new Error(userMessage);
 };

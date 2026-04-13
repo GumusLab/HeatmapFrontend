@@ -45,6 +45,8 @@ function Home() {
         // Open a new tab with a reference to the file
         // window.open(`/heatmap?fileKey=${encodeURIComponent(fileKey)}`, '_blank');
         window.open(`heatmap?fileKey=${encodeURIComponent(fileKey)}`, '_blank');
+        // window.open(`/clusterchirp-test/heatmap?fileKey=${encodeURIComponent(fileKey)}`, '_blank');
+
         setIsProcessing(false);
       };
       
@@ -67,6 +69,8 @@ function Home() {
     // Open a new tab with sample data page
     // window.open('/sample-data', '_blank');
     window.open('sample-data', '_blank');
+    // window.open('/clusterchirp-test/sample-data', '_blank');
+
 
   };
 
@@ -153,7 +157,7 @@ function Home() {
               
             <input
               type="file"
-              accept=".csv, .tsv, .json"
+              accept=".csv, .tsv, .xlsx, .json"
               onChange={handleFileChange}
               style={{ display: "none" }}
               id="file-upload"
@@ -187,8 +191,21 @@ function Home() {
               Data Format
             </Button>
           </Box>
+
+          {/* Free Access Statement - Required for NAR Web Server Issue */}
+          <Typography
+            sx={{
+              textAlign: "center",
+              margin: "5px auto",
+              fontSize: "14px",
+              color: "#666",
+              fontStyle: "italic"
+            }}
+          >
+            ClusterChirp is freely available for all users. No registration required.
+          </Typography>
         </div>
-        
+
         <div className="extraSpace">
         </div>
       </div>

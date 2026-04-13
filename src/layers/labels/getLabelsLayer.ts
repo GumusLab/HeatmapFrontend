@@ -271,6 +271,8 @@ import {
   LABEL_SCALE,
   MIN_LABEL_CHARS,
   CATEGORY_LAYER_HEIGHT,
+  CLUSTER_LAYER_HEIGHT,
+  CLUSTER_LAYER_GAP,
   INITIAL_GAP,
   LAYER_GAP,
   DEFAULT_LABEL_GAP
@@ -314,6 +316,7 @@ export function getLabelsLayer({
   // This logic runs on the CPU but is lightweight.
   const { width: cellWidth, height: cellHeight } = heatmapState.cellDimensions;
   const heatmapHeight = heatmapState.height;
+  const heatmapWidth = heatmapState.width;
   const cellSize = axis === 'row' ? cellHeight : cellWidth;
   const viewState = viewStates[IDS.VIEWS.HEATMAP_GRID];
 
@@ -323,18 +326,39 @@ export function getLabelsLayer({
   }
   const zoom = viewState.zoom as number;
 
+  // Generic centering calculation based on BASE_ZOOM
+  const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+  const labelSpaceCentering = labelSpace / 2 / baseScaleFactor;
+
+  // Always use heatmap (view) dimensions for centering
+  // This keeps the coordinate system consistent with the heatmap scatter layer
+  const centeringX = heatmapWidth / 2 / baseScaleFactor;
+  const centeringY = heatmapHeight / 2 / baseScaleFactor;
+
   let offset = labelsConfig?.offset ? labelsConfig.offset : DEFAULT_LABEL_OFFSET - 5;
   let totalGap = 0;
 
   if (axis === "row") {
+    // Add gap for row category layers
     if (order.rowCat.length > 0) {
       totalGap += order.rowCat.length * (CATEGORY_LAYER_HEIGHT + LAYER_GAP) + INITIAL_GAP;
     }
+    // Add gap for row cluster layer
     if (order.row === "cluster") {
-      totalGap += 5 + INITIAL_GAP;
+      totalGap += CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP + INITIAL_GAP;
+    }
+  } else {
+    // Column axis
+    // Add gap for column category layers
+    if (order.colCat.length > 0) {
+      totalGap += order.colCat.length * (CATEGORY_LAYER_HEIGHT + LAYER_GAP) + INITIAL_GAP;
+    }
+    // Add gap for column cluster layer
+    if (order.col === "cluster") {
+      totalGap += CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP + INITIAL_GAP;
     }
   }
-  offset = -labelSpace / 4 + totalGap + DEFAULT_LABEL_GAP;
+  offset = -labelSpaceCentering + totalGap + DEFAULT_LABEL_GAP;
 
   const sizeMaxPixels = labelsConfig?.maxSize || DEFAULT_LABEL_MAX_SIZE;
   const normalizedZoom = zoom - BASE_ZOOM;
@@ -342,6 +366,10 @@ export function getLabelsLayer({
   const minScale = LABEL_SCALE * 0.125; // Prevent labels from becoming too small
   const maxScale = LABEL_SCALE * 8;     // Prevent labels from becoming too large
   scale = Math.min(Math.max(scale, minScale), maxScale);
+
+  // Determine if aggregation is happening (same logic as getHeatmapGridLayerScatter.ts)
+  // Aggregation starts when zoom < BASE_ZOOM (i.e., zoom < 0)
+  const isAggregated = zoom < BASE_ZOOM;
 
   // --- Core Optimization ---
 
@@ -387,25 +415,35 @@ export function getLabelsLayer({
       if (!shouldRenderLabel(index)) {
         return [Infinity, Infinity];
       }
-      
-      const adjustedPosition = getAdjustedPositionIndex(index);
-      const rowPosition = [-offset, adjustedPosition * cellHeight + 0.5 * cellHeight - heatmapHeight / 4];
 
-      let rowOffset: number = 0;
+      const adjustedPosition = getAdjustedPositionIndex(index);
+
       if (axis === 'row') {
-        if (order.row === 'cluster') rowOffset -= 5;
-        rowOffset -= order.rowCat.length * CATEGORY_LAYER_HEIGHT;
+        // Row labels: x = offset from left edge, y = row position
+        const x = -offset;
+        const y = adjustedPosition * cellHeight + 0.5 * cellHeight - centeringY;
+        return [x, y] as [number, number];
+      } else {
+        // Column labels: x = column position, y = offset from top edge
+        const x = adjustedPosition * cellWidth + 0.5 * cellWidth - centeringX;
+        const y = -offset;
+        return [x, y] as [number, number];
       }
-      return (axis === 'row' ? [rowPosition[0] + rowOffset, rowPosition[1]] : rowPosition.reverse()) as [number, number];
     },
 
     getText: (_: any, { index }: { index: number }) => {
       const labelItem = sourceLabels[index];
       if (!labelItem || !shouldRenderLabel(index)) return '';
 
-      if (axis === 'column' && Object.keys(categories.col).length > 0) return "";
+      // Hide labels when aggregation is happening (zoom < BASE_ZOOM)
+      if (isAggregated) return "";
+
+      // Hide labels when categories are selected or available in the data
+      if (axis === 'row' && (order.rowCat.length > 0 || Object.keys(categories.row).length > 0)) return "";
+      if (axis === 'column' && (order.colCat.length > 0 || Object.keys(categories.col).length > 0)) return "";
+
       if (!labelSpace) return labelItem.text;
-      
+
       const maxChars = labelsConfig?.maxChars || MIN_LABEL_CHARS;
       return maybeTruncateLabel(labelItem.text, Math.max(0, maxChars));
     },
@@ -425,8 +463,9 @@ export function getLabelsLayer({
     background: true,
     sizeUnits: 'meters',
     getTextAnchor: axis === 'row' ? 'end' : 'start',
-    sizeMaxPixels: cellSize,
-    sizeScale: scale,
+    // Column labels are smaller to avoid overwhelming the view
+    sizeMaxPixels: axis === 'row' ? cellSize : cellSize * 0.6,
+    sizeScale: axis === 'row' ? scale : scale * 0.7,
     pickable: true,
     onClick,
 
@@ -434,8 +473,8 @@ export function getLabelsLayer({
     // These tell Deck.gl when to re-run the accessors. They point to the
     // actual data sources, not newly created arrays.
     updateTriggers: {
-      getPosition: [offset, cellHeight, heatmapHeight, order, filteredIdxDict],
-      getText: [sourceLabels, labelSpace, labelsConfig, categories, filteredIdxDict],
+      getPosition: [offset, cellWidth, cellHeight, centeringX, centeringY, order, filteredIdxDict],
+      getText: [sourceLabels, labelSpace, labelsConfig, categories, order.rowCat, order.colCat, filteredIdxDict, isAggregated],
       getBackgroundColor: [sourceLabels, searchTerm, filteredIdxDict],
       // sizeScale and sizeMaxPixels are derived from other props, so they
       // don't need to be in triggers if the props they depend on are.
@@ -453,12 +492,12 @@ export function getLabelsLayer({
 
         // The title's position is centered on the visible area.
         const colPosition = [
-            viewState.target[0] + (numVisibleCols * cellWidth) / 2 / (2 ** (zoom - 1)),
-            -(labelSpace / 4),
+            viewState.target[0] + (numVisibleCols * cellWidth) / 2 / (2 ** (zoom - BASE_ZOOM)),
+            -labelSpaceCentering,
         ];
         const rowPosition = [
-            -(labelSpace / 4),
-            viewState.target[1] + (numVisibleRows * cellHeight) / 2 / (2 ** (zoom - 1)),
+            -labelSpaceCentering,
+            viewState.target[1] + (numVisibleRows * cellHeight) / 2 / (2 ** (zoom - BASE_ZOOM)),
         ];
         return (axis === 'row' ? rowPosition : colPosition) as [number, number];
     },

@@ -177,14 +177,16 @@
 
 
 
-import { CATEGORY_LAYER_HEIGHT,CLUSTER_LAYER_HEIGHT,IDS,INITIAL_GAP,LAYER_GAP } from "../const";
+import { CATEGORY_LAYER_HEIGHT,CLUSTER_LAYER_HEIGHT,CLUSTER_LAYER_GAP,IDS,INITIAL_GAP,LAYER_GAP,BASE_ZOOM } from "../const";
 import { DeckGLHeatmapProps } from '../DeckGLHeatmap.types';
 import { DataStateShape, HeatmapStateShape, ViewStates } from '../types';
 import { order } from "../types/index";
 import { getClusterLayer } from './cluster/getClusterLayer';
 import { getViewBorderLayer } from "./getViewBorderLayer";
-import { getHeatmapGridLayer } from './heatmapGrid/getHeatmapGridLayer';
+// import { getHeatmapGridLayer } from './heatmapGrid/getHeatmapGridLayer'; // Old polygon version
+import { getHeatmapGridLayer } from './heatmapGrid/getHeatmapGridLayerScatter'; // New scatter (circles) version
 import { getCatLabelsLayer } from './labels/getCatLabelsLayer';
+import { getColLabelsLayer } from './labels/getColLabelsLayer';
 import { getRowLabelsLayer } from './labels/getRowLabelsLayer';
 import { getViewportDebugLayer } from './getViewportDebugLayer';
 
@@ -200,7 +202,7 @@ export type UseLayersProps = Pick<
 > & {
   dataState: DataStateShape | null;
   heatmapState: HeatmapStateShape | null;
-  visibleIndices: number[]|null, // Add this parameter
+  visibleBounds: {startRow: number, endRow: number, startCol: number, endCol: number} | null;
   viewStates: ViewStates;
   colLabelsWidth: number;
   rowLabelsWidth: number;
@@ -219,7 +221,7 @@ export type UseLayersProps = Pick<
 export const getLayers = ({
   dataState,
   heatmapState,
-  visibleIndices,
+  visibleBounds,
   viewStates,
   onClick,
   labels,
@@ -227,7 +229,7 @@ export const getLayers = ({
   colLabelsWidth,
   rowLabelsWidth,
   rowLabelsTitle,
-  // columnLabelsTitle,
+  columnLabelsTitle,
   searchTerm,
   order,
   categories,
@@ -244,21 +246,20 @@ export const getLayers = ({
 
     const Layers = []
 
-    const heatmapGrid = getHeatmapGridLayer(
-      // dataState,
+    const heatmapGridLayers = getHeatmapGridLayer(
       heatmapState,
       opacityVal,
-      // opacityVal,
       onClick?.heatmapCell,
-      visibleIndices, 
       viewStates[IDS.VIEWS.HEATMAP_GRID],
       filteredIdxDict,
       debug,
+      visibleBounds,
+      dataState.numColumns
     );
 
-
-    
-    Layers.push(heatmapGrid)
+    if (heatmapGridLayers) {
+      Layers.push(...heatmapGridLayers);
+    }
 
     const rowLabels = getRowLabelsLayer({
       dataState,
@@ -276,20 +277,21 @@ export const getLayers = ({
 
     Layers.push(rowLabels)
 
-    // const colLabels = getColLabelsLayer({
-    //   dataState,
-    //   viewStates,
-    //   heatmapState,
-    //   onClick: onClick?.columnLabel,
-    //   labelsConfig: labels?.column,
-    //   labelSpace: colLabelsWidth,
-    //   title: columnLabelsTitle,
-    //   searchTerm,
-    //   order,
-    //   categories
-    // });
-    
-    // Layers.push(colLabels)
+    const colLabels = getColLabelsLayer({
+      dataState,
+      viewStates,
+      heatmapState,
+      onClick: onClick?.columnLabel,
+      labelsConfig: labels?.column,
+      labelSpace: colLabelsWidth,
+      title: columnLabelsTitle,
+      searchTerm,
+      order,
+      categories,
+      filteredIdxDict
+    });
+
+    Layers.push(colLabels)
 
 
 
@@ -334,22 +336,28 @@ export const getLayers = ({
   if (order.colCat.length > 0 && dataState.colLabels.length > 0) {
     // Get categories from the first column label
     const firstLabelCategories = dataState.colLabels[0].category || {};
-    
+
     // Get available category keys from the first label
     const availableCategories = Object.keys(firstLabelCategories);
-    
+
     if (availableCategories.length > 0) {
       const categoryHeight = CATEGORY_LAYER_HEIGHT;
       const gap = LAYER_GAP;
-      const halfViewHeight = colLabelsWidth / 4;
-      
+
+      // Generic centering calculation based on BASE_ZOOM
+      const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+      const halfViewHeight = colLabelsWidth / 2 / baseScaleFactor;
+
       // Filter colCats to only include categories that exist in the first label
       const validColCats = order.colCat.filter(cat => availableCategories.includes(cat));
-      
+
+      // Add offset for cluster layer if column clustering is enabled
+      const clusterOffset = order.col === 'cluster' ? (CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP) : 0;
+
       for (let i = 0; i < validColCats.length; i++) {
         const initialGap = INITIAL_GAP;
-        const yPosition = halfViewHeight - initialGap - ((i+1) * (categoryHeight + gap));
-        
+        const yPosition = halfViewHeight - initialGap - clusterOffset - ((i+1) * (categoryHeight + gap));
+
         const catLayer = getCatLabelsLayer(
           dataState,
           heatmapState,
@@ -361,7 +369,7 @@ export const getLayers = ({
           "col",
           filteredIdxDict
         );
-        
+
         Layers.push(catLayer);
       }
     }
@@ -369,27 +377,32 @@ export const getLayers = ({
 
   if(order.rowCat.length > 0) {
     const rowCats = order.rowCat;
-    
+
     // Use the same height as heatmap state cells
     const categoryHeight = CATEGORY_LAYER_HEIGHT;
-    
+
     // Small gap between layers
     const gap = LAYER_GAP;
-    
-    // Half-width of the row labels view (distance from center to left)
-    const halfViewWidth = rowLabelsWidth / 4;
-    
+
+    // Generic centering calculation based on BASE_ZOOM
+    const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+    const halfViewWidth = rowLabelsWidth / 2 / baseScaleFactor;
+
+    // Add offset for cluster layer if row clustering is enabled
+    const clusterOffset = order.row === 'cluster' ? (CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP) : 0;
+
     for(let i = 0; i < rowCats.length; i++) {
       // Calculate position from left of view
       // Start with a small initial gap from the very left
       const initialGap = INITIAL_GAP;
-      
+
       // Position calculation:
       // - halfViewWidth is the distance from center to left edge
       // - Subtract initialGap to move right from the very left
+      // - Subtract clusterOffset to make room for cluster layer
       // - Subtract width and gap for each previous layer
-      const xPosition = halfViewWidth - initialGap - ((i+1) * (categoryHeight + gap));
-      
+      const xPosition = halfViewWidth - initialGap - clusterOffset - ((i+1) * (categoryHeight + gap));
+
       const catLayer = getCatLabelsLayer(
         dataState,
         heatmapState,
@@ -401,7 +414,7 @@ export const getLayers = ({
         "row",
         filteredIdxDict
       );
-      
+
       Layers.push(catLayer);
     }
   }

@@ -108,13 +108,13 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({
 
   if (totalFilters === 0 && !hasChanges) {
     return (
-      <Box 
-        sx={{ 
-          mx: '10px', 
-          mt: '40px',
+      <Box
+        sx={{
+          mx: '10px',
+          mt: '28px',
           border: '1px solid rgba(135, 135, 135, 0.6)',
           borderRadius: '4px',
-          padding: '12px',
+          padding: '8px',
           '&:hover': {
             borderColor: 'rgba(0, 0, 0, 0.87)'
           }
@@ -123,10 +123,10 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({
         <Typography
           variant="h6"
           sx={{
-            fontSize: '14px',
+            fontSize: '13px',
             fontWeight: 'normal',
             fontFamily: 'Arial, sans-serif',
-            mb: 1,
+            mb: 0.5,
             display: 'flex',
             alignItems: 'center',
             gap: 1,
@@ -139,7 +139,7 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({
         <Typography
           variant="body2"
           sx={{
-            fontSize: '12px',
+            fontSize: '11px',
             color: 'text.secondary',
             fontStyle: 'italic'
           }}
@@ -151,23 +151,23 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({
   }
 
   return (
-    <Box 
-      sx={{ 
-        mx: '10px', 
-        mt: '40px',
+    <Box
+      sx={{
+        mx: '10px',
+        mt: '25px',
         border: '1px solid rgba(135, 135, 135, 0.6)',
         borderRadius: '4px',
-        padding: '12px',
+        padding: '8px',
         '&:hover': {
           borderColor: 'rgba(0, 0, 0, 0.87)'
         }
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
         <Typography
           variant="h6"
           sx={{
-            fontSize: '14px',
+            fontSize: '13px',
             fontWeight: 'normal',
             fontFamily: 'Arial, sans-serif',
             display: 'flex',

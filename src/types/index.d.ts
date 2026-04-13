@@ -104,6 +104,9 @@ numRows: number;
 numColumns: number;
 colLabels: { text: string; position: number; category:{[key: string]: string}|null; categoryColor:{[key: string]: string}|null; group:number[]|null; metadata:{[key: string]: string}|null;}[];
 rowLabels: { text: string; position: number; category:{[key: string]: string}|null; categoryColor:{[key: string]: string}|null; group:number[]|null;}[];
+// Index mappings: visualPosition -> originalIndex (for crop functionality)
+sortedRowIndices: number[];
+sortedColIndices: number[];
 };
 
 // type DataStateShape = {
@@ -124,6 +127,7 @@ rowCat:string[];
 sortByRowCat:string;
 colCat:string[];
 sortByColCat:string;
+sortColsByRowName: string | null;
 }
 
 declare module '@deck.gl/core';

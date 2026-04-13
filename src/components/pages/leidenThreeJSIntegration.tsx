@@ -1163,7 +1163,10 @@ function allocateSphericalCaps(
     const capHeight = allocatedArea / (2 * Math.PI * sphereRadius);
     
     // Position cap center using golden spiral
-    const y = 1 - (2 * index) / (sortedClusters.length - 1); // y from 1 to -1
+    // Handle single cluster case: place at north pole (y = 1)
+    const y = sortedClusters.length === 1 
+      ? 0  // Place single cluster at equator for better visibility
+      : 1 - (2 * index) / (sortedClusters.length - 1); // y from 1 to -1
     const radiusAtY = Math.sqrt(Math.max(0, 1 - y * y));
     const theta = goldenAngle * index;
     

@@ -21,8 +21,9 @@ import '@react-sigma/graph-search/lib/style.css';
 import "@react-sigma/core/lib/style.css";
 import { getCorrelationNetwork } from '../../backendApi/heatmapData';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
-import { MiniMap } from '@react-sigma/minimap';
+// import { MiniMap } from '@react-sigma/minimap'; // Disabled - creates extra WebGL contexts
 import * as THREE from 'three';
+import { COLOR_BLUE } from '../../const';
 // ✅ ADD THESE THREE IMPORTS
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -34,7 +35,7 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree'; // A fitting icon
 import CircularProgress from '@mui/material/CircularProgress';
 import { forceSimulation, forceManyBody, forceLink, forceCenter, forceZ } from 'd3-force-3d';
 // ✅ NEW: Import WebGL context manager
-import { SigmaContainerWithCleanup, ThreeJSContainerWithCleanup, WebGLContextInterceptor } from '../WebGLContextManager';
+import { SigmaContainerWithCleanup, ThreeJSContainerWithCleanup } from '../WebGLContextManager';
 import SlowLayoutControl from '../SlowLayoutControl';
 import { 
   applyClusteredSphereLayout,
@@ -56,10 +57,67 @@ const MIN_EDGE_SIZE = 0.2; // Decreased from 0.5
 const MAX_EDGE_SIZE = 1;   // Decreased from 2
 
 // ✅ NEW: Network Legend Component for better interpretation
-const NetworkLegend = ({ processedNetworkData }) => {
+const NetworkLegend = ({ processedNetworkData, nodeColorMode, nodeMetadata, getColorForMetadataValue }) => {
   if (!processedNetworkData) return null;
   
   const { nodeCount, edgeCount, clusterName } = processedNetworkData;
+  
+  // Generate legend items based on color mode
+  const getNodeColorLegend = () => {
+    if (nodeColorMode === 'connectivity') {
+      // Show connectivity legend
+      return (
+        <>
+          <h5 style={{ margin: '0 0 8px 0', color: '#555' }}>Node Colors (Connectivity):</h5>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '12px', height: '12px', backgroundColor: 'rgb(29, 43, 83)', borderRadius: '50%' }}></div>
+              <span style={{ fontSize: '11px' }}>High connectivity</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '12px', height: '12px', backgroundColor: 'rgb(126, 142, 196)', borderRadius: '50%' }}></div>
+              <span style={{ fontSize: '11px' }}>Medium connectivity</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '12px', height: '12px', backgroundColor: 'rgb(199, 206, 233)', borderRadius: '50%' }}></div>
+              <span style={{ fontSize: '11px' }}>Low connectivity</span>
+            </div>
+          </div>
+        </>
+      );
+    } else if (nodeMetadata && nodeColorMode !== 'connectivity') {
+      // Show metadata-based legend
+      const metadataKey = nodeColorMode;
+      const uniqueValues = new Set();
+      
+      // Collect unique values for this metadata field
+      Object.values(nodeMetadata).forEach(metadata => {
+        if (metadata[metadataKey]) {
+          uniqueValues.add(metadata[metadataKey]);
+        }
+      });
+      
+      const sortedValues = Array.from(uniqueValues).sort();
+      
+      return (
+        <>
+          <h5 style={{ margin: '0 0 8px 0', color: '#555' }}>
+            {metadataKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Colors:
+          </h5>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '200px', overflowY: 'auto' }}>
+            {sortedValues.map(value => (
+              <div key={value} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '12px', height: '12px', backgroundColor: getColorForMetadataValue(value, metadataKey), borderRadius: '50%' }}></div>
+                <span style={{ fontSize: '11px' }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      );
+    }
+    
+    return null;
+  };
   
   return (
     <div style={{
@@ -92,21 +150,7 @@ const NetworkLegend = ({ processedNetworkData }) => {
       </div>
       
       <div style={{ borderTop: '1px solid #eee', paddingTop: '10px' }}>
-        <h5 style={{ margin: '0 0 8px 0', color: '#555' }}>Node Colors:</h5>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#1976D2', borderRadius: '50%' }}></div>
-            <span>High connectivity (&gt;10)</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#42A5F5', borderRadius: '50%' }}></div>
-            <span>Medium connectivity (5-10)</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#90CAF9', borderRadius: '50%' }}></div>
-            <span>Low connectivity (&lt;5)</span>
-          </div>
-        </div>
+        {getNodeColorLegend()}
       </div>
       
       <div style={{ borderTop: '1px solid #eee', paddingTop: '10px', marginTop: '10px' }}>
@@ -139,10 +183,68 @@ const NetworkLegend = ({ processedNetworkData }) => {
 };
 
 // ✅ NEW: Network Legend Component for 2D view positioned below controls
-const NetworkLegend2D = ({ processedNetworkData }) => {
+const NetworkLegend2D = ({ processedNetworkData, nodeColorMode, nodeMetadata, getColorForMetadataValue }) => {
   if (!processedNetworkData) return null;
   
   const { nodeCount, edgeCount, clusterName } = processedNetworkData;
+  
+  // Generate legend items based on color mode
+  const getNodeColorLegend = () => {
+    if (nodeColorMode === 'connectivity') {
+      // Show connectivity legend
+      return (
+        <>
+          <h5 style={{ margin: '0 0 8px 0', color: '#555' }}>Node Colors (Connectivity):</h5>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '12px', height: '12px', backgroundColor: 'rgb(29, 43, 83)', borderRadius: '50%' }}></div>
+              <span style={{ fontSize: '11px' }}>High connectivity</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '12px', height: '12px', backgroundColor: 'rgb(126, 142, 196)', borderRadius: '50%' }}></div>
+              <span style={{ fontSize: '11px' }}>Medium connectivity</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '12px', height: '12px', backgroundColor: 'rgb(199, 206, 233)', borderRadius: '50%' }}></div>
+              <span style={{ fontSize: '11px' }}>Low connectivity</span>
+            </div>
+          </div>
+        </>
+      );
+    } else if (nodeMetadata && nodeColorMode !== 'connectivity') {
+      // Show metadata-based legend
+      const metadataKey = nodeColorMode;
+      const uniqueValues = new Set();
+      
+      // Collect unique values for this metadata field
+      Object.values(nodeMetadata).forEach(metadata => {
+        if (metadata[metadataKey]) {
+          uniqueValues.add(metadata[metadataKey]);
+        }
+      });
+      
+      const sortedValues = Array.from(uniqueValues).sort();
+      
+      return (
+        <>
+          <h5 style={{ margin: '0 0 8px 0', color: 'black', fontWeight: 'bold', fontSize
+          : '12px' }}>
+            {metadataKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Colors:
+          </h5>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '200px', overflowY: 'auto' }}>
+            {sortedValues.map(value => (
+              <div key={value} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '12px', height: '12px', backgroundColor: getColorForMetadataValue(value, metadataKey), borderRadius: '50%' }}></div>
+                <span style={{ fontSize: '12px' }}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      );
+    }
+    
+    return null;
+  };
   
   return (
     <div style={{
@@ -150,19 +252,22 @@ const NetworkLegend2D = ({ processedNetworkData }) => {
       top: '200px', // Position below the network control panel
       left: '15px',
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      padding: '15px',
-      borderRadius: '8px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-      fontSize: '12px',
+      padding: '10px',
+      borderRadius: '6px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
       zIndex: 1000,
-      minWidth: '200px'
+      minWidth: '160px',
+      maxWidth: '200px',
+      marginTop : '20px'
     }}>
-      <h4 style={{ margin: '0 0 10px 0', color: '#333' }}>
-        🔗 Network Overview
-      </h4>
+
+      {/* <h5 style={{ margin: '0 0 6px 0', color: '#333', fontSize: '14px', fontWeight: 'bold' }}>
+        🔗 Network Legend
+      </h5> */}
       
-      <div style={{ marginBottom: '8px' }}>
+      {/* <div style={{ marginBottom: '8px' }}>
         <strong>Cluster:</strong> {clusterName}
       </div>
       
@@ -172,24 +277,10 @@ const NetworkLegend2D = ({ processedNetworkData }) => {
       
       <div style={{ marginBottom: '12px' }}>
         <strong>Correlations:</strong> {edgeCount}
-      </div>
+      </div> */}
       
       <div style={{ borderTop: '1px solid #eee', paddingTop: '10px' }}>
-        <h5 style={{ margin: '0 0 8px 0', color: '#555' }}>Node Colors:</h5>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#1976D2', borderRadius: '50%' }}></div>
-            <span>High connectivity (&gt;10)</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#42A5F5', borderRadius: '50%' }}></div>
-            <span>Medium connectivity (5-10)</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#90CAF9', borderRadius: '50%' }}></div>
-            <span>Low connectivity (&lt;5)</span>
-          </div>
-        </div>
+        {getNodeColorLegend()}
       </div>
       
       {/* <div style={{ borderTop: '1px solid #eee', paddingTop: '10px', marginTop: '10px' }}>
@@ -222,7 +313,7 @@ const NetworkLegend2D = ({ processedNetworkData }) => {
 };
 
 // const ThreeJSNetwork = ({ networkData, onNetworkSuccess, onNetworkError, onDataFetchError, showLabels, onLayoutChange, is3DLayout, selectedNode, focusNode }) 
-const ThreeJSNetwork = ({ processedNetworkData, showLabels, onLayoutChange, is3DLayout, selectedNode, focusNode, onApplyLeidenClustering, triggerLeidenClustering}) => {
+const ThreeJSNetwork = ({ processedNetworkData, showLabels, onLayoutChange, is3DLayout, selectedNode, focusNode, onApplyLeidenClustering, triggerLeidenClustering, nodeColorMode, setNodeColorMode, availableColorModes, nodeMetadata, getColorForMetadataValue}) => {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -367,6 +458,47 @@ const cleanupThree = ({ scene, renderer, mountEl, handleResize, animationId }) =
 };
 
 
+  // Update 3D node colors when color mode changes
+  useEffect(() => {
+    if (instancedMeshRef.current && nodeColorMode !== undefined) {
+      console.log('🎨 Updating 3D node colors for mode:', nodeColorMode);
+      
+      const mesh = instancedMeshRef.current;
+      const tmpColor = new THREE.Color();
+      
+      nodesRef.current.forEach((nodeData, nodeId) => {
+        const index = nodeData.instanceIndex;
+        
+        if (nodeColorMode === 'connectivity') {
+          // Use existing cluster-based coloring
+          if (nodeData.isInSelectedCluster) {
+            tmpColor.set(0xFF5722); // Orange for selected cluster
+          } else {
+            tmpColor.set(0xAAAAAA); // Grey for others
+          }
+        } else if (nodeMetadata && nodeColorMode !== 'connectivity') {
+          // Metadata-based coloring
+          const metadata = nodeMetadata[nodeId];
+          const metadataValue = metadata?.[nodeColorMode];
+          
+          if (metadataValue) {
+            const colorStr = getColorForMetadataValue(metadataValue, nodeColorMode);
+            tmpColor.set(colorStr);
+          } else {
+            tmpColor.set(0xAAAAAA); // Default grey
+          }
+        } else {
+          tmpColor.set(0xAAAAAA); // Default grey
+        }
+        
+        mesh.setColorAt(index, tmpColor);
+      });
+      
+      mesh.instanceColor.needsUpdate = true;
+      console.log('✅ 3D node colors updated');
+    }
+  }, [nodeColorMode, nodeMetadata]);
+
   useEffect(() => {
 
     if (!processedNetworkData || !mountRef.current) return;
@@ -455,7 +587,10 @@ const cleanupThree = ({ scene, renderer, mountEl, handleResize, animationId }) =
               processedNetworkData,
               processedNetworkData.global3DPositions.coordinates, // Extract coordinates
               processedNetworkData.geneIds,
-              sceneRef.current // Pass the scene
+              sceneRef.current, // Pass the scene
+              nodeColorMode,
+              nodeMetadata,
+              getColorForMetadataValue
             );
             console.log('✅ 3D Network initialization complete');
           } catch (error) {
@@ -685,8 +820,8 @@ const applyLeidenClustering = async () => {  // Add async here
       nodesRef,
       sceneRef,
       {
-        correlationThreshold: 0.7,
-        resolution: 1.0,
+        correlationThreshold: 0.5,  // Increased to be more selective
+        resolution: 0.5,  // Lower resolution to encourage more clusters
         radius: 35,
         maxGenes: 5000,
         updateEdgesCallback: updateEdgePositions
@@ -885,7 +1020,10 @@ const switchToGlobalView = async () => {
       processedNetworkData,
       global3DCoordinates,
       selectedClusterGeneIds,
-      scene
+      scene,
+      nodeColorMode,
+      nodeMetadata,
+      getColorForMetadataValue
     );
     
     setCurrentView('global');
@@ -1286,7 +1424,10 @@ const create3DNetworkOptimized = async (
   processedNetworkData, // Data for the selected cluster (genes, correlations)
   global3DCoordinates, // Just the coordinates part
   selectedClusterGeneIds, // Genes in the currently selected heatmap cluster for highlighting
-  scene // The Three.js scene instance
+  scene, // The Three.js scene instance
+  nodeColorMode, // Color mode for nodes
+  nodeMetadata, // Metadata for nodes
+  getColorForMetadataValue // Function to get color for metadata value
 ) => {
   console.log(`🎲 Creating optimized 3D network (Global View).`);
   
@@ -1301,7 +1442,7 @@ const create3DNetworkOptimized = async (
 
     // Step 1: Create instanced nodes using the global sphere layout positions
     const clusterInfo = processedNetworkData.global3DPositions?.cluster_info || null;
-    await createInstancedNodes(allGlobalGeneIds, scene, global3DCoordinates, selectedClusterGeneIds, clusterInfo);
+    await createInstancedNodes(allGlobalGeneIds, scene, global3DCoordinates, selectedClusterGeneIds, clusterInfo, nodeColorMode, nodeMetadata, getColorForMetadataValue);
     
     // Step 2: Create filtered edges using correlation edges from the backend
     const correlationEdges = processedNetworkData.global3DPositions?.correlation_edges || processedNetworkData.correlations || [];
@@ -1466,7 +1607,10 @@ const createInstancedNodes = async (
   scene,
   global3DCoordinates, // Now expects just the coordinates object
   selectedClusterGeneIds,
-  clusterInfo // NEW: cluster information from backend
+  clusterInfo, // NEW: cluster information from backend
+  nodeColorMode, // Color mode for nodes
+  nodeMetadata, // Metadata for nodes
+  getColorForMetadataValue // Function to get color for metadata value
 ) => {
   console.log("createInstancedNodes: Using global 3D coordinates from backend with cluster-based coloring.");
   console.log("📊 Cluster info:", clusterInfo);
@@ -1566,24 +1710,43 @@ const createInstancedNodes = async (
     matrix.setPosition(pos.x, pos.y, pos.z);
     mesh.setMatrixAt(i, matrix);
 
-    // Color based on whether node is in the selected cluster
+    // Color based on color mode
     const clusterData = geneToCluster.get(id);
     const isInSelectedCluster = selectedSet.has(id);
     
-    if (isInSelectedCluster) {
-      // Node is in the selected cluster - use bright color
-      tmpColor.copy(selectedClusterColor);
-      selectedClusterCount++;
-      if (selectedClusterCount <= 3) {
-        console.log(`🎨 Selected cluster node ${id} colored orange:`, tmpColor);
+    if (nodeColorMode === 'connectivity') {
+      // Original cluster-based coloring
+      if (isInSelectedCluster) {
+        // Node is in the selected cluster - use bright color
+        tmpColor.copy(selectedClusterColor);
+        selectedClusterCount++;
+        if (selectedClusterCount <= 3) {
+          console.log(`🎨 Selected cluster node ${id} colored orange:`, tmpColor);
+        }
+      } else {
+        // All other nodes (other clusters + isolated) - use grey
+        tmpColor.copy(greyNodeColor);
+        otherNodesCount++;
+        if (otherNodesCount <= 3) {
+          console.log(`🎨 Other node ${id} colored grey:`, tmpColor);
+        }
+      }
+    } else if (nodeMetadata && nodeColorMode !== 'connectivity') {
+      // Metadata-based coloring
+      const metadata = nodeMetadata[id];
+      const metadataValue = metadata?.[nodeColorMode];
+      
+      if (metadataValue) {
+        // Get color from metadata
+        const colorStr = getColorForMetadataValue(metadataValue, nodeColorMode);
+        tmpColor.set(colorStr);
+      } else {
+        // Default grey if no metadata
+        tmpColor.copy(greyNodeColor);
       }
     } else {
-      // All other nodes (other clusters + isolated) - use grey
+      // Default to grey
       tmpColor.copy(greyNodeColor);
-      otherNodesCount++;
-      if (otherNodesCount <= 3) {
-        console.log(`🎨 Other node ${id} colored grey:`, tmpColor);
-      }
     }
     
     mesh.setColorAt(i, tmpColor);
@@ -1878,7 +2041,7 @@ const createFilteredEdges = async (
             margin: '2px',
             boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)',
             border: '1px solid rgba(0, 0, 0, 0.1)',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: '600',
             color: '#2c3e50',
             textAlign: 'center',
@@ -1916,10 +2079,11 @@ const createFilteredEdges = async (
         border: 'none',
         outline: 'none',
         background: 'transparent',
-        padding: '2px 4px',
+        padding: '6px 8px',  // Increased padding for more height
         fontSize: '12px',
         width: '100%',
-        minWidth: '160px'
+        minWidth: '160px',
+        height: '32px'  // Explicit height for consistency
       }}
       onChange={(e) => handleSearch(e.target.value)}
       onFocus={() => {
@@ -1993,6 +2157,47 @@ const createFilteredEdges = async (
     )}
   </div>
 </div>
+        
+        {/* Node Color Mode Dropdown */}
+        <div 
+          style={{
+            background: 'white',
+            borderRadius: '4px',
+            padding: '6px 8px',
+            margin: '2px',
+            boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)',
+            border: '1px solid rgba(0, 0, 0, 0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            fontSize: '12px',
+            minWidth: '150px'
+          }}
+        >
+          <label style={{ fontSize: '11px', fontWeight: '500', color: '#34495e' }}>
+            Color by:
+          </label>
+          <select
+            value={nodeColorMode}
+            onChange={(e) => setNodeColorMode(e.target.value)}
+            style={{
+              padding: '4px',
+              fontSize: '11px',
+              border: '1px solid rgba(0, 0, 0, 0.2)',
+              borderRadius: '2px',
+              background: 'white',
+              cursor: 'pointer',
+              outline: 'none'
+            }}
+          >
+            {availableColorModes.map(mode => (
+              <option key={mode} value={mode}>
+                {mode === 'connectivity' ? 'Connectivity' : 
+                 mode.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </option>
+            ))}
+          </select>
+        </div>
         
         {/* Show Labels Toggle for 3D */}
         <div 
@@ -2166,6 +2371,14 @@ const createFilteredEdges = async (
           🔬 Click "Explore Cluster" for detailed view
         </div>
       </div>
+      
+      {/* Network Legend for 3D view */}
+      <NetworkLegend
+        processedNetworkData={processedNetworkData}
+        nodeColorMode={nodeColorMode}
+        nodeMetadata={nodeMetadata}
+        getColorForMetadataValue={getColorForMetadataValue}
+      />
     </div>
   );
 };
@@ -2223,6 +2436,7 @@ const LabelToggleControl = ({ onToggle, showLabels }) => {
         alignItems: 'center',
         gap: '8px',
         fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
         userSelect: 'none',
         minWidth: '120px'
       }}
@@ -2232,9 +2446,7 @@ const LabelToggleControl = ({ onToggle, showLabels }) => {
       <span style={{ fontSize: '14px' }}>🏷️</span>
       
       <span style={{
-        fontSize: '11px',
-        fontWeight: '500',
-        color: '#34495e',
+        fontWeight: 'bold',
         flex: 1
       }}>
         Show Labels
@@ -2265,13 +2477,66 @@ const LabelToggleControl = ({ onToggle, showLabels }) => {
   );
 };
 
+const ColorModeControl = ({ nodeColorMode, setNodeColorMode, availableColorModes }) => {
+  return (
+    <div 
+      className="sigma-control"
+      style={{
+        background: 'white',
+        borderRadius: '4px',
+        padding: '3px 4px',
+        margin: '2px',
+        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)',
+        border: '1px solid rgba(0, 0, 0, 0.1)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        // fontSize: '14px',
+        fontFamily: 'Arial, sans-serif',
+        // fontWeight: 'bold',
+        minWidth: '150px'
+      }}
+    >
+      <span style={{ fontSize: '14px' }}>🎨</span>
+      
+      <label style={{ 
+         fontSize: '12px',
+         fontWeight: 'bold',
+         marginRight: '4px'
+      }}>
+        Color:
+      </label>
+      
+      <select
+        value={nodeColorMode}
+        onChange={(e) => setNodeColorMode(e.target.value)}
+        style={{
+          padding: '2px 4px',
+          fontSize: '12px',
+          border: '1px solid rgba(0, 0, 0, 0.2)',
+          borderRadius: '2px',
+          background: 'white',
+          cursor: 'pointer',
+          outline: 'none',
+          flex: 1
+        }}
+      >
+        {availableColorModes.map(mode => (
+          <option key={mode} value={mode}>
+            {mode === 'connectivity' ? 'Connectivity' : 
+             mode.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 const LayoutToggleControl = ({ onToggle, is3DLayout, isGlobal3DDisabled }) => {
   const getButtonText = () => {
     if (is3DLayout) {
       return 'Switch to 2D';
-    } else if (isGlobal3DDisabled) {
-      return 'Leiden Clustering';
-    } else {
+    }  else {
       return 'Switch to 3D';
     }
   };
@@ -2279,9 +2544,7 @@ const LayoutToggleControl = ({ onToggle, is3DLayout, isGlobal3DDisabled }) => {
   const getButtonTitle = () => {
     if (is3DLayout) {
       return 'Switch to 2D network layout';
-    } else if (isGlobal3DDisabled) {
-      return 'Global 3D coordinates disabled - will show Leiden clustering network';
-    } else {
+    }  else {
       return 'Switch to 3D global network layout';
     }
   };
@@ -2290,11 +2553,12 @@ const LayoutToggleControl = ({ onToggle, is3DLayout, isGlobal3DDisabled }) => {
     <div 
       className="sigma-control"
       style={{
-        background: is3DLayout 
-          ? 'linear-gradient(45deg, #667eea, #764ba2)'
-          : isGlobal3DDisabled
-          ? 'linear-gradient(45deg, #f093fb, #f5576c)' // Different color for Leiden clustering
-          : 'white',
+        background: COLOR_BLUE,
+        // background: is3DLayout 
+        //   ? 'linear-gradient(45deg, #667eea, #764ba2)'
+        //   // : isGlobal3DDisabled
+        //   // ? 'linear-gradient(45deg, #f093fb, #f5576c)' // Different color for Leiden clustering
+        //   : 'white',
         borderRadius: '4px',
         padding: '6px 8px',
         margin: '2px',
@@ -2305,6 +2569,8 @@ const LayoutToggleControl = ({ onToggle, is3DLayout, isGlobal3DDisabled }) => {
         alignItems: 'center',
         gap: '8px',
         fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
+        fontWeight: 'bold',
         userSelect: 'none',
         transition: 'all 0.2s ease',
         minWidth: '120px'
@@ -2313,12 +2579,13 @@ const LayoutToggleControl = ({ onToggle, is3DLayout, isGlobal3DDisabled }) => {
       title={getButtonTitle()}
     >
       <span style={{ fontSize: '14px' }}>
-        {is3DLayout ? '🎯' : isGlobal3DDisabled ? '🧠' : '🎲'}
+        {is3DLayout ? '🎯' : '🎲'}
       </span>
       
       <span style={{
-        fontSize: '11px',
-        fontWeight: '500',
+        fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
+        fontWeight: 'bold',
         color: (is3DLayout || isGlobal3DDisabled) ? 'white' : '#34495e',
         flex: 1
       }}>
@@ -2326,13 +2593,13 @@ const LayoutToggleControl = ({ onToggle, is3DLayout, isGlobal3DDisabled }) => {
       </span>
       
       {/* Status indicator */}
-      <div style={{
+      {/* <div style={{
         width: '8px',
         height: '8px',
         borderRadius: '50%',
         background: is3DLayout ? '#4CAF50' : '#f39c12',
         boxShadow: `0 0 6px ${is3DLayout ? '#4CAF50' : '#f39c12'}`
-      }}></div>
+      }}></div> */}
     </div>
   );
 };
@@ -2402,7 +2669,10 @@ const AutoForceAtlas2 = () => {
 };
 
 const LoadNetworkGraph = ({ 
-  processedNetworkData
+  processedNetworkData,
+  nodeColorMode,
+  nodeMetadata,
+  getColorForMetadataValue
 }) => {
   const loadGraph = useLoadGraph();
   const [processedData, setProcessedData] = useState(null);
@@ -2411,12 +2681,12 @@ const LoadNetworkGraph = ({
 
   useEffect(() => {
     if (processedNetworkData) {
-      const sigmaData = transform2DData(processedNetworkData);
+      const sigmaData = transform2DData(processedNetworkData, 'connectivity'); // Always use connectivity for initial load
       setProcessedData(sigmaData);
     }
-  }, [processedNetworkData]);
+  }, [processedNetworkData]); // Only re-transform when network data changes, not color mode
   
-  const transform2DData = (processedNetworkData) => {
+  const transform2DData = (processedNetworkData, colorMode = 'connectivity') => {
     const nodes = [];
     const edges = [];
 
@@ -2502,10 +2772,30 @@ const LoadNetworkGraph = ({
         // const nodeSize = Math.max(8, Math.min(20, 8 + connections * 1.0)); // Increased from 4-12 to 8-20
         const nodeSize = 1;
 
-        const nodeColor = connections > 10 ? '#1565C0' :  // High connectivity: Dark blue
-                         connections > 5 ? '#1976D2' :   // Medium connectivity: Blue
-                         connections > 2 ? '#42A5F5' :   // Low connectivity: Light blue
-                         '#90CAF9';                      // Very low: Very light blue
+        // Dynamic node coloring based on selected mode
+        let nodeColor = '#2196F3'; // Default blue
+        
+        if (colorMode === 'connectivity') {
+          // Connectivity-based coloring
+          if (connections > 10) {
+            nodeColor = 'rgb(29, 43, 83)'; // Dark blue - high connectivity
+          } else if (connections > 5) {
+            nodeColor = 'rgb(126, 142, 196)'; // Medium blue
+          } else if (connections > 2) {
+            nodeColor = 'rgb(199, 206, 233)'; // Light blue  
+          } else {
+            nodeColor = 'rgb(199, 206, 233)'; // Very light blue - low connectivity
+          }
+        } else {
+          // Metadata-based coloring
+          const metadata = processedNetworkData?.nodeMetadata?.[nodeId];
+          const metadataValue = metadata?.[colorMode];
+          
+          if (metadataValue) {
+            // Generate color based on metadata value
+            nodeColor = getColorForMetadataValue(metadataValue, colorMode);
+          }
+        }
         
         nodes.push({
           id: nodeId,
@@ -2533,6 +2823,58 @@ const LoadNetworkGraph = ({
     
     return { nodes, edges };
   };
+
+  // Update node colors when color mode changes (without full re-render)
+  useEffect(() => {
+    if (sigma && processedNetworkData && nodeColorMode !== undefined) {
+      // Add a small delay to ensure graph is fully loaded
+      const timeoutId = setTimeout(() => {
+        const graph = sigma.getGraph();
+        if (!graph) return;
+        
+        console.log('🎨 Updating node colors for mode:', nodeColorMode);
+        
+        let updateCount = 0;
+        graph.forEachNode((nodeId, attributes) => {
+          let nodeColor = '#2196F3'; // Default blue
+          const connections = attributes.connections || 0;
+          
+          if (nodeColorMode === 'connectivity') {
+            // Connectivity-based coloring based on connections
+            if (connections > 10) {
+              nodeColor = 'rgb(29, 43, 83)'; // Dark blue - high connectivity
+            } else if (connections > 5) {
+              nodeColor = 'rgb(126, 142, 196)'; // Medium blue
+            } else if (connections > 2) {
+              nodeColor = 'rgb(199, 206, 233)'; // Light blue
+            } else {
+              nodeColor = 'rgb(199, 206, 233)'; // Very light blue - low connectivity
+            }
+          } else {
+            // Metadata-based coloring
+            const metadata = nodeMetadata?.[nodeId];
+            const metadataValue = metadata?.[nodeColorMode];
+            
+            if (metadataValue) {
+              nodeColor = getColorForMetadataValue(metadataValue, nodeColorMode);
+              if (updateCount < 5) {
+                console.log(`Node ${nodeId}: ${nodeColorMode}="${metadataValue}" -> ${nodeColor}`);
+              }
+            }
+          }
+          
+          graph.setNodeAttribute(nodeId, 'color', nodeColor);
+          updateCount++;
+        });
+        
+        // Force re-render
+        sigma.refresh();
+        console.log(`✅ Updated ${updateCount} node colors`);
+      }, 100); // Small delay to let graph stabilize
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [nodeColorMode, nodeMetadata, sigma, processedNetworkData, getColorForMetadataValue]);
 
   useEffect(() => {
     if (processedData) {
@@ -2604,14 +2946,26 @@ const LoadNetworkGraph = ({
         const baseSize = 5;
 
         
-        // ✅ FIXED: Blue-based coloring based on connectivity levels
-        let nodeColor;
-        if (connections > 10) {
-          nodeColor = '#1976D2'; // Dark blue for high connectivity (>10)
-        } else if (connections > 5) {
-          nodeColor = '#42A5F5'; // Medium blue for medium connectivity (5-10)
+        // Dynamic node coloring based on selected mode
+        let nodeColor = '#2196F3'; // Default blue
+        
+        if (nodeColorMode === 'connectivity') {
+          // Connectivity-based coloring
+          if (connections > 10) {
+            nodeColor = '#1976D2'; // Dark blue for high connectivity (>10)
+          } else if (connections > 5) {
+            nodeColor = '#42A5F5'; // Medium blue for medium connectivity (5-10)
+          } else {
+            nodeColor = '#90CAF9'; // Light blue for low connectivity (<5)
+          }
         } else {
-          nodeColor = '#90CAF9'; // Light blue for low connectivity (<5)
+          // Metadata-based coloring
+          const metadata = processedNetworkData?.nodeMetadata?.[nodeId];
+          const metadataValue = metadata?.[nodeColorMode];
+          
+          if (metadataValue) {
+            nodeColor = getColorForMetadataValue(metadataValue, nodeColorMode);
+          }
         }
         
         graph.setNodeAttribute(nodeId, 'color', nodeColor);
@@ -2630,13 +2984,18 @@ const LoadNetworkGraph = ({
         const connections = nodeAttrs.connections || 0;
         const importance = nodeAttrs.importance || 0;
         
+        // Always set label (for hover display), but adjust size based on importance
+        graph.setNodeAttribute(nodeId, 'label', nodeId);
+        
         // Show labels for highly connected or important nodes
         if (connections > 5 || importance > 2) {
-          graph.setNodeAttribute(nodeId, 'label', nodeId);
           graph.setNodeAttribute(nodeId, 'labelSize', Math.min(14, 10 + connections * 0.3));
           graph.setNodeAttribute(nodeId, 'labelColor', '#000000');
+          graph.setNodeAttribute(nodeId, 'labelVisible', true);
         } else {
-          graph.setNodeAttribute(nodeId, 'label', ''); // Hide label for less important nodes
+          graph.setNodeAttribute(nodeId, 'labelSize', 8); // Smaller size for less important nodes
+          graph.setNodeAttribute(nodeId, 'labelColor', '#666666');
+          graph.setNodeAttribute(nodeId, 'labelVisible', false); // Hide by default but available on hover
         }
       });
       
@@ -2703,9 +3062,63 @@ const NetworkVisualizationComponent = ({
   const [focusNode, setFocusNode] = useState(null);
   const [processedNetworkData, setProcessedNetworkData] = useState(null);
   const [isLoadingNetwork, setIsLoadingNetwork] = useState(false);
+  const [nodeColorMode, setNodeColorMode] = useState('connectivity'); // 'connectivity' or metadata keys
+  const [availableColorModes, setAvailableColorModes] = useState(['connectivity']); // Available coloring options
+  const [nodeMetadata, setNodeMetadata] = useState({}); // Node metadata from backend
   
   // ✅ Ref to store the Leiden clustering function from ThreeJSNetwork
   const applyLeidenClusteringRef = useRef(null);
+  
+  // Color palettes for different metadata types
+  const metadataColorPalettes = {
+    'cell_type': {
+      'B cells': '#FF6B6B',
+      'CD8+ T cells': '#4ECDC4',
+      'CD8- FOXP3- T cells': '#45B7D1',
+      'CD8- FOXP3+ T cells': '#96CEB4',
+      'T cells': '#FECA57',
+      'Tumor cells': '#9B59B6',
+      'Macrophages': '#F39C12',
+      'Dendritic cells': '#E74C3C',
+      'NK cells': '#1ABC9C',
+      'Plasma cells': '#D68910',
+      'Fibroblasts': '#8B4513',
+      'Endothelial cells': '#2ECC71',
+      'Stromal cells': '#95A5A6'
+    },
+    'compartment': {
+      'Tumor': '#FF6B6B',
+      'Fibrosis': '#4ECDC4',
+      'Stroma': '#45B7D1',
+      'Immune': '#96CEB4',
+      'Normal': '#FECA57'
+    },
+    'patient': {} // Will be populated dynamically
+  };
+  
+  // Function to generate color for metadata value
+  const getColorForMetadataValue = (value, metadataKey) => {
+    // Check if we have a predefined palette for this metadata type
+    if (metadataColorPalettes[metadataKey] && metadataColorPalettes[metadataKey][value]) {
+      return metadataColorPalettes[metadataKey][value];
+    }
+    
+    // Generate color dynamically using a hash function
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',
+      '#9B59B6', '#F39C12', '#E74C3C', '#1ABC9C', '#D68910',
+      '#8B4513', '#2ECC71', '#95A5A6', '#FF9FF3', '#54A0FF',
+      '#48DBFB', '#00D2D3', '#1DD1A1', '#FECA57', '#FF6B9D'
+    ];
+    
+    // Simple hash function to consistently map values to colors
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+      hash = ((hash << 5) - hash) + value.charCodeAt(i);
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
   
   // ✅ State to trigger Leiden clustering after scene initialization
   const [triggerLeidenClustering, setTriggerLeidenClustering] = useState(0);
@@ -2811,10 +3224,67 @@ useEffect(() => {
       const correlations = networkResponse.correlationMatrix.correlations || [];
       const nodeSet = new Set();
       
+      // DEBUG: Track which genes appear in correlations
+      console.log('🔍 DEBUG: Network Response Analysis');
+      console.log('📊 Original genes requested:', networkData.geneIds?.length || 'Unknown');
+      console.log('📊 Genes in request:', networkData.geneIds?.slice(0, 10).join(', '), '...');
+      
+      // Backend response info
+      console.log('📈 Backend Response:');
+      console.log('   - Total genes processed (filteredGenes):', networkResponse.filteredGenes || 'Not provided');
+      console.log('   - Total genes after filtering (totalGenes):', networkResponse.totalGenes || 'Not provided');
+      console.log('   - Total correlations found:', correlations.length);
+      console.log('   - Correlation threshold used:', networkResponse.filters?.correlationThreshold || 'Unknown');
+      console.log('   - Variance percentile used:', networkResponse.filters?.variancePercentile || 'Unknown');
+      
       correlations.forEach(corr => {
         nodeSet.add(corr.gene1);
         nodeSet.add(corr.gene2);
       });
+      
+      // DEBUG: Find missing genes
+      const requestedGenes = new Set(networkData.geneIds || []);
+      const genesInCorrelations = nodeSet;
+      const missingGenes = [...requestedGenes].filter(gene => !genesInCorrelations.has(gene));
+      
+      console.log('🔎 Gene Filtering Analysis:');
+      console.log('   - Genes requested:', requestedGenes.size);
+      console.log('   - Genes appearing in correlations:', genesInCorrelations.size);
+      console.log('   - Missing genes (no correlations above threshold):', missingGenes.length);
+      if (missingGenes.length > 0) {
+        console.log('   - Missing gene list:', missingGenes.slice(0, 20).join(', '));
+        console.log('   - These genes had NO correlations >= threshold with any other gene');
+      }
+      
+      // Check if backend provided additional metadata
+      if (networkResponse.correlationMatrix) {
+        console.log('📊 Additional Backend Metadata:');
+        const matrix = networkResponse.correlationMatrix;
+        console.log('   - Computation time:', matrix.computationTime, 'seconds');
+        console.log('   - Pairs computed:', matrix.totalPairsComputed);
+        console.log('   - Significant correlations:', matrix.totalCorrelations);
+        console.log('   - Pass rate:', 
+          ((matrix.totalCorrelations / Math.max(matrix.totalPairsComputed, 1)) * 100).toFixed(2) + '%');
+      }
+      
+      // Extract node metadata from backend response
+      const nodeMetadataFromBackend = networkResponse.nodeMetadata || {};
+      setNodeMetadata(nodeMetadataFromBackend);
+      
+      // Extract available metadata keys for coloring options
+      const metadataKeys = new Set();
+      Object.values(nodeMetadataFromBackend).forEach(metadata => {
+        Object.keys(metadata).forEach(key => {
+          if (key !== 'id') { // Skip id field if present
+            metadataKeys.add(key);
+          }
+        });
+      });
+      
+      // Set available color modes (connectivity + metadata keys)
+      const colorModes = ['connectivity', ...Array.from(metadataKeys)];
+      setAvailableColorModes(colorModes);
+      console.log('📎 Available color modes:', colorModes);
       
       const processedData = {
         correlations,
@@ -2822,11 +3292,22 @@ useEffect(() => {
         nodeCount: nodeSet.size,
         edgeCount: correlations.length,
         clusterName: networkData.clusterName || 'Selected Cluster',
-        rawResponse: networkResponse // Keep for any edge cases
+        rawResponse: networkResponse, // Keep for any edge cases
+        nodeMetadata: nodeMetadata, // Add node metadata from backend
+        // Add debug info
+        debugInfo: {
+          originalGeneCount: networkData.geneIds?.length || 0,
+          backendProcessedCount: networkResponse.filteredGenes || 0,
+          missingGenes: missingGenes,
+          correlationThreshold: networkResponse.filters?.correlationThreshold || 0.5
+        }
       };
 
       const finalNodeCount = processedData.nodes.length;
       const originalNodeCount = networkData.geneIds?.length || finalNodeCount;
+      
+      console.log('📌 SUMMARY:');
+      console.log(`   Requested ${originalNodeCount} genes → Backend processed ${networkResponse.filteredGenes || '?'} → Found ${finalNodeCount} with correlations`);
       
       // setProcessedNetworkData(processedData);
       setProcessedNetworkData({
@@ -2909,39 +3390,34 @@ if (isLoadingNetwork || !processedNetworkData) {
   return (
     <div style={{
       width: '100%',
-      // height: '800px',
-      // background: 'linear-gradient(135deg, #667eea 0%, #1E90FF 100%)',
-      backgroundColor: '#f8fafc',
+      backgroundColor: '#ffffff',
       borderRadius: '12px',
       position: 'relative',
-      padding: '10px',
-      borderRadius: '12px',
-      // boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+      marginTop: '50px',
     }}>
-      {/* ✅ NEW: WebGL Context Interceptor - catches ALL WebGL contexts */}
-      <WebGLContextInterceptor />
+      {/* WebGL Context Interceptor removed - was causing duplicate context registrations
+         and making the browser close the heatmap context (oldest) when limit was reached */}
       {/* ✅ NEW: WebGL Context Monitor */}
       {/* WebGL context debug display removed */}
 
 <Paper 
   elevation={0} 
   sx={{ 
-    p: '0px 8px', 
+    p: '0px 5px', 
     display: 'flex', 
     alignItems: 'center', 
     justifyContent: 'space-between',
-    gap: 2,
+    // gap: 2,
     // backdropFilter: 'blur(10px)',
     // backgroundColor: 'rgba(255, 255, 255, 0.9)',
     backgroundColor: '#f8fafc', // A clean, light background
 
-    marginBottom:'10px',
-    border:'0px'
+    marginBottom:'0px',
   }}
 >
   {/* Left Side: Title and Info (No Changes Here) */}
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap' }}>
+    <Typography variant="h6" sx={{ whiteSpace: 'nowrap', fontSize: '16px', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
       Gene Correlation Network
     </Typography>
      <Chip 
@@ -2949,43 +3425,27 @@ if (isLoadingNetwork || !processedNetworkData) {
       size="small"
       sx={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }} 
     />
-    {networkData.geneIds && (
+    {processedNetworkData.nodeCount && (
       <Chip
         icon={<AccountTreeIcon />}
-        label={`${networkData.geneIds.length} genes`}
+        // label={`${networkData.geneIds.length} genes`}
+        label={`${processedNetworkData.nodeCount} filtered genes`}
+
+        size="small"
+        variant="outlined"
+      />
+    )}
+     {processedNetworkData.edgeCount && (
+      <Chip
+        icon={<AccountTreeIcon />}
+        // label={`${networkData.geneIds.length} genes`}
+        label={`${processedNetworkData.edgeCount} correlations`}
+
         size="small"
         variant="outlined"
       />
     )}
   </Box>
-
-  {/* Right Side: Legend and Close Button */}
-  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-    
-    {/* ✅ NEW: Legend with visible text labels */}
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-      {/* Item 1: Positive Correlation */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Box sx={{ width: 18, height: 4, bgcolor: '#4CAF50', borderRadius: '2px' }} />
-        <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1 }}>
-          Positive
-        </Typography>
-      </Box>
-      {/* Item 2: Negative Correlation */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Box sx={{ width: 18, height: 4, bgcolor: '#F44336', borderRadius: '2px' }} />
-        <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1 }}>
-          Negative
-        </Typography>
-      </Box>
-      {/* Item 3: Gene/Node */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Box sx={{ width: 14, height: 14, bgcolor: '#2196F3', borderRadius: '50%', border: '1.5px solid #1976D2' }} />
-        <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1 }}>
-          Node
-        </Typography>
-      </Box>
-    </Box>
 
     {/* Close Button */}
     <Tooltip title="Close Network">
@@ -2993,7 +3453,6 @@ if (isLoadingNetwork || !processedNetworkData) {
         <CloseIcon />
       </IconButton>
     </Tooltip>
-  </Box>
 </Paper>
               {/* Sigma Network Container - STABLE VERSION */}
         {is3DLayout ? (
@@ -3012,6 +3471,11 @@ if (isLoadingNetwork || !processedNetworkData) {
               focusNode={focusNode}
               onApplyLeidenClustering={(fn) => { applyLeidenClusteringRef.current = fn; }}
               triggerLeidenClustering={triggerLeidenClustering}
+              nodeColorMode={nodeColorMode}
+              setNodeColorMode={setNodeColorMode}
+              availableColorModes={availableColorModes}
+              nodeMetadata={nodeMetadata}
+              getColorForMetadataValue={getColorForMetadataValue}
             />
           </ThreeJSContainerWithCleanup>
       ):(
@@ -3059,13 +3523,21 @@ if (isLoadingNetwork || !processedNetworkData) {
       >
         <LoadNetworkGraph 
           processedNetworkData={processedNetworkData}
+          nodeColorMode={nodeColorMode}
+          nodeMetadata={nodeMetadata}
+          getColorForMetadataValue={getColorForMetadataValue}
         />
         
         {/* ✅ NEW: Auto-running ForceAtlas2 for tight clustering */}
         {/* <AutoForceAtlas2 /> */}
         
         {/* ✅ NEW: Network Legend for 2D view positioned below controls */}
-        <NetworkLegend2D processedNetworkData={processedNetworkData} />
+        <NetworkLegend2D 
+          processedNetworkData={processedNetworkData}
+          nodeColorMode={nodeColorMode}
+          nodeMetadata={nodeMetadata}
+          getColorForMetadataValue={getColorForMetadataValue}
+        />
         
         {/* ✅ Focus on selected/searched node */}
         <FocusOnNode node={focusNode ?? selectedNode} />
@@ -3081,15 +3553,14 @@ if (isLoadingNetwork || !processedNetworkData) {
             style={{
               background: 'white',
               borderRadius: '4px',
-              padding: '4px 8px',
+              padding: '2px 4px',
               margin: '2px',
               boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)',
               border: '1px solid rgba(0, 0, 0, 0.1)',
-              fontSize: '11px',
-              fontWeight: '600',
-              color: '#2c3e50',
+              fontSize: '12px',
+              fontFamily: 'Arial, sans-serif',
+              fontWeight: 'bold',
               textAlign: 'center',
-              letterSpacing: '0.5px',
               userSelect: 'none'
             }}
           >
@@ -3097,7 +3568,7 @@ if (isLoadingNetwork || !processedNetworkData) {
           </div>
           
           {/* ✅ Integrated GraphSearch with proper isolation */}
-          <div 
+          {/* <div 
             className="sigma-control"
             style={{
               background: 'white',
@@ -3110,11 +3581,8 @@ if (isLoadingNetwork || !processedNetworkData) {
               position: 'relative',
               zIndex: 1000
             }}
-          >
-            <div style={{ 
-              position: 'relative',
-              isolation: 'isolate' // Prevent interference with parent containers
-            }}>
+          > */}
+         
               <GraphSearch
                 type="nodes"
                 value={selectedNode ? { type: 'nodes', id: selectedNode } : null}
@@ -3126,24 +3594,30 @@ if (isLoadingNetwork || !processedNetworkData) {
                   border: 'none',
                   boxShadow: 'none',
                   background: 'transparent',
-                  padding: '2px 4px',
-                  fontSize: '12px',
+                  padding: '4px',
+                  fontSize: '13px',
+                  fontFamily: 'Arial, sans-serif',
+                  fontWeight: 'normal',
                   width: '100%',
                   minWidth: '160px'
                 }}
               />
-            </div>
-          </div>
+          {/* </div> */}
           
+          <ColorModeControl
+            nodeColorMode={nodeColorMode}
+            setNodeColorMode={setNodeColorMode}
+            availableColorModes={availableColorModes}
+          />
           <LabelToggleControl 
             onToggle={handleShowLabelsChange}
             showLabels={showLabels}
           />
-          <LayoutToggleControl 
+          {/* <LayoutToggleControl
             onToggle={handleLayoutChange}
             is3DLayout={is3DLayout}
             isGlobal3DDisabled={networkData?.global3DError?.includes('disabled')}
-          />
+          /> */}
         </ControlsContainer>
 
         {/* Standard Controls */}
@@ -3179,10 +3653,10 @@ if (isLoadingNetwork || !processedNetworkData) {
 
         </ControlsContainer>
         
-        {/* MiniMap moved to top-right */}
-        <ControlsContainer position={'top-right'}>
+        {/* MiniMap disabled - creates additional WebGL contexts which causes heatmap to disappear */}
+        {/* <ControlsContainer position={'top-right'}>
           <MiniMap width="100px" height="100px" />
-        </ControlsContainer>
+        </ControlsContainer> */}
         
       </SigmaContainer>
       </SigmaContainerWithCleanup>)

@@ -26,15 +26,17 @@ interface HeatmapWrapperProps {
   homepage: boolean;
   cat?: CategoryType;
   onSessionReady?: (sessionId: string) => void;
+  onStatsUpdate?: (stats: { sampleSize: number; dataPoints: number }) => void;
 }
 
-const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({ 
-  data, 
-  id, 
-  fileSelectedFlag, 
+const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({
+  data,
+  id,
+  fileSelectedFlag,
   homepage,
   cat = { row: {}, col: {} },
-  onSessionReady 
+  onSessionReady,
+  onStatsUpdate
 }) => {
  
   // --- Hooks and State Management ---
@@ -134,11 +136,18 @@ const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({
 
   const handleNetworkSuccess = (clusterName: string, nodeCount: number, originalCount?: number) => {
     hideLoading();
-    let message = `Network with ${nodeCount} nodes created for ${clusterName}. Scroll down to view.`;
+    let message = `Network with ${nodeCount} nodes created for ${clusterName}.`;
     if (originalCount && originalCount > nodeCount) {
-      message = `Network created for ${clusterName}. Displaying ${nodeCount} of ${originalCount} genes after filtering. Scroll down to view.`;
+      message = `Network created for ${clusterName}. Displaying ${nodeCount} of ${originalCount} genes after filtering.`;
     }
-    addNotification({ type: 'success', title: 'Network Ready! 🎉', message, action: 'scrollTo:[data-network-section]', actionText: 'View Network ↓', autoHide: false });
+    addNotification({ type: 'success', title: 'Network Ready! 🎉', message, duration: 3000 });
+    // Auto-scroll to network section
+    setTimeout(() => {
+      const networkSection = document.querySelector('[data-network-section]');
+      if (networkSection) {
+        networkSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
   };
 
   const handleNetworkError = (clusterName: string, errorMsg: string) => {
@@ -177,7 +186,14 @@ const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({
     try {
       const results = await getEnrichmentData(genes, sessionId.current);
       setPathwayAnalysisData({ clusterName, enrichmentResults: results });
-      addNotification({ type: 'success', title: 'Analysis Complete!', message: `Enrichment results for ${clusterName} are ready to view.`, action: 'scrollTo:[data-pathway-section]', actionText: 'View Analysis ↓', autoHide: false });
+      addNotification({ type: 'success', title: 'Analysis Complete!', message: `Enrichment results for ${clusterName} are ready to view.`, duration: 3000 });
+      // Auto-scroll to pathway section
+      setTimeout(() => {
+        const pathwaySection = document.querySelector('[data-pathway-section]');
+        if (pathwaySection) {
+          pathwaySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
     } catch (error: any) {
       addNotification({ type: 'error', title: 'Analysis Failed', message: error.message || `Could not fetch results for ${clusterName}.` });
       setShowPathwayView(false);
@@ -243,6 +259,20 @@ const HeatmapWrapper: React.FC<HeatmapWrapperProps> = ({
           }
         })
         .catch((error) => {
+          // Handle duplicate upload errors gracefully
+          if (error.message === 'DUPLICATE_UPLOAD_DETECTED') {
+            console.log('🔄 Duplicate upload detected - this is expected behavior');
+            console.log('   The server prevented duplicate processing after browser auto-retry');
+            
+            // Show a user-friendly message instead of an error
+            addNotification({ 
+              type: 'info', 
+              title: 'Upload In Progress', 
+              message: 'Your file upload is being processed. Please wait for the results to appear.',
+              duration: 5000
+            });
+            return;
+          }
           notifyDataError(error.message || 'An unknown error occurred.');
         });
     } else if (!fileSelectedFlag && homepage && data) {
@@ -452,6 +482,7 @@ return (
             showLoading={showLoading}
             hideLoading={hideLoading}
             addNotification={addNotification}
+            onStatsUpdate={onStatsUpdate}
           />
         ) : (
           !showStrategySelection && (
@@ -469,8 +500,7 @@ return (
           style={{
             width: "100%",
             minHeight: "100vh", // Network takes full viewport when shown
-            flex: "0 0 auto", // Don't shrink
-            backgroundColor: "#f8f9fa", // Optional: visual distinction
+            flex: "0 0 auto", 
             borderTop: "2px solid #e9ecef", // Optional: separator
             position: "relative",
             marginTop: "20px"
@@ -490,84 +520,18 @@ return (
 
       {/* PATHWAY SECTION - Shows below heatmap when open */}
       {!showStrategySelection && showPathwayView && (
-        <div 
-          data-pathway-section 
+        <div
+          data-pathway-section
           style={{
             width: "100%",
             minHeight: "100vh", // Pathway takes full viewport when shown
             flex: "0 0 auto",
             backgroundColor: "#f1f3f4",
             borderTop: "2px solid #e9ecef",
+            paddingTop: "20px", // Space between heatmap and pathway
             position: "relative"
           }}
         >
-          {/* Pathway header with close button */}
-          <div style={{ 
-            padding: '10px 20px', 
-            backgroundColor: '#fff', 
-            borderBottom: '1px solid #e9ecef',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#333' }}>
-                🧭 Pathway Analysis
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button 
-                onClick={() => {
-                  document.querySelector('[data-pathway-section]')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
-              >
-                📍 Jump to Pathway
-              </button>
-              <button 
-                onClick={() => {
-                  document.querySelector(`#${id}`)?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
-              >
-                ⬆️ Back to Heatmap
-              </button>
-              <button 
-                onClick={handleHidePathwayAnalysis}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
-              >
-                ✕ Close Pathway
-              </button>
-            </div>
-          </div>
-          
           {pathwayAnalysisData && (
             <PathwayAnalysisView
               analysisData={pathwayAnalysisData}

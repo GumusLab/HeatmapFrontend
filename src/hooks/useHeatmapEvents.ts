@@ -40,7 +40,7 @@ export const useHeatmapEvents = (
       type: 'error',
       title: 'Data Processing Failed',
       message: `There was an error processing your file: ${errorMsg}`,
-      autoHide: false
+      duration: 5000
     });
   };
 
@@ -56,7 +56,7 @@ export const useHeatmapEvents = (
           type: 'success',
           title: 'Clustering Applied! 🔗',
           message: 'The heatmap has been re-ordered. You can now click on the new cluster dendrograms that appear on the axes to analyze specific groups.',
-          autoHide: false, // Keep this helpful message on screen
+          duration: 5000, // Auto-hide after 5 seconds
         });
       };
 

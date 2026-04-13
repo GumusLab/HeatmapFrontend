@@ -313,18 +313,10 @@
 // export default Examples;
 
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Card, CardMedia, CardContent, Grid, Container, Chip, IconButton } from '@mui/material';
+import { Box, Typography, Card, CardMedia, CardContent, Grid, Container, Link } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import DatasetIcon from '@mui/icons-material/Dataset';
-import ScienceIcon from '@mui/icons-material/Science';
-import BiotechIcon from '@mui/icons-material/Biotech';
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import DnsIcon from '@mui/icons-material/Dns';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import BloodtypeIcon from '@mui/icons-material/Bloodtype';
 
 
 // Import your actual datasets
@@ -358,113 +350,109 @@ const StyledCardMedia = styled(CardMedia)({
   backgroundColor: '#f5f5f5',
 });
 
-const IconWrapper = styled(Box)(({ theme }) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: 40,
-  height: 40,
-  borderRadius: '50%',
-  backgroundColor: theme.palette.primary.main,
-  color: 'white',
-  marginBottom: theme.spacing(2),
-}));
-
 const Examples = () => {
   const navigate = useNavigate();
 
   const examples = [
     {
       id: 1,
-      routeId: "genomics", // This matches the route parameter
-      title: "Gene Expression Analysis",
-      icon: <ScienceIcon />,
+      routeId: "genomics",
+      title: "Transcriptomics",
       image: "genomics.png",
-      description: "RNA-seq data from a cancer research study comparing tumor vs normal tissue samples. This dataset contains expression levels of 500+ genes across 50 patient samples, revealing distinct clustering patterns between cancerous and healthy tissue.",
-      studySource: "Nature Cancer Research, 2024",
-      dataPoints: "Around 3M data points",
-      category: "Genomics",
+      description: "RNA-seq whole transcriptome analysis from CPTAC (Clinical Proteomic Tumor Analysis Consortium) lung cancer tumor samples. This dataset contains expression levels of 30,931 genes across 98 samples, revealing distinct clustering patterns in tumor tissue.",
+      dataPoints: "30,931 genes × 98 samples (~3M measurements)",
       color: "#1976d2",
-      hasData: true // Indicates this example has real data
+      hasData: true,
+      tutorialLink: "https://gumuslab.github.io/ClusterChirpDocs/tutorials/basic-functions",
+      paperLink: "https://www.cell.com/cancer-cell/fulltext/S1535-6108(23)00219-2",
+      paperCitation: "Li et al., 2023"
     },
     {
       id: 2,
+      routeId: "gu16257_data",
+      title: "Olink Proteomics",
+      image: "gu16257_data.png",
+      description: "Olink proximity extension assay (PEA) profiling of immune biomarkers in cancer patients undergoing immunotherapy treatment. Dataset includes 77 protein biomarkers (cytokines, chemokines, growth factors, immune checkpoints) measured across 196 patient samples, revealing treatment response signatures and immune activation patterns.",
+      dataPoints: "196 samples × 77 proteins (15,092 measurements)",
+      color: "#7b1fa2",
+      hasData: true,
+      tutorialLink: "https://gumuslab.github.io/ClusterChirpDocs/tutorials/examples",
+      paperLink: "https://pubmed.ncbi.nlm.nih.gov/37783966/",
+      paperCitation: "Galsky et al., 2023"
+    },
+    {
+      id: 3,
+      routeId: "mIHC_data",
+      title: "Spatial Proteomics",
+      image: "mIHC_data.png",
+      description: "Multiplexed immunohistochemistry (mIHC) single-cell spatial proteomics from cancer patients. Dataset includes 1,202 cells from 6 patients with 8 distinct cell types (Cancer, Macrophages, CD8+ T cells, B cells, Plasma cells, Regulatory T cells, Stromal cells) across 8 protein markers (CD20, CD3, CD68, CD8, FOXP3, MZB1, PanCK, aSMA), revealing tumor microenvironment architecture.",
+      dataPoints: "1,202 cells × 32 features (38,464 measurements)",
+      color: "#9c27b0",
+      hasData: true,
+      tutorialLink: "https://gumuslab.github.io/ClusterChirpDocs/tutorials/examples",
+      paperLink: "https://www.nature.com/articles/s41551-025-01475-9",
+      paperCitation: "Buckup et al., 2025"
+    },
+    {
+      id: 4,
       routeId: "proteomics",
-      title: "Proteomics Abundance Matrix",
-      icon: <BiotechIcon />,
+      title: "MS Proteomics",
       image: "proteomics.png",
-      description: "Mass spectrometry-based protein quantification across different treatment conditions. Dataset includes 10909 proteins measured in triplicate across 108 samples, showing differential protein expression and pathway enrichment patterns.",
-      studySource: "Journal of Proteome Research, 2024",
-      dataPoints: "1.18M+ measurements",
-      category: "Proteomics",
+      description: "Mass spectrometry-based protein quantification from CPTAC (Clinical Proteomic Tumor Analysis Consortium) tumor samples. Dataset includes 10,908 proteins measured across 109 tumor samples, showing differential protein expression and pathway enrichment patterns.",
+      dataPoints: "10,908 proteins × 109 samples (~1.19M measurements)",
       color: "#7b1fa2",
       hasData: true
     },
     {
-      id: 3,
+      id: 5,
       routeId: "immunogenomics",
-      title: "Immune Cell Transcriptomics",
-      icon: <BloodtypeIcon />,
+      title: "Immunogenomics",
       image: "immvar.png",
       description: "Gene expression profiling of purified immune cells (CD4+ T cells and CD14+ monocytes) from healthy individuals across three ancestry groups. This population genetics study reveals how genetic variation shapes immune transcriptomes and disease susceptibility patterns.",
-      studySource: "Harvard Medical School, Nature, 2014",
-      dataPoints: "980+ samples, 20,000+ genes",
-      category: "Immunogenomics",
+      dataPoints: "21,219 genes × 985 samples (~20.9M measurements)",
       color: "#4caf50",
-      hasData: true // Set to true when you have the data file
-    },
-    {
-      id: 4,
-      routeId: "single-cell", // Future implementation
-      title: "Single-Cell RNA Sequencing",
-      icon: <AccountTreeIcon />,
-      image: "https://via.placeholder.com/400x200/2e7d32/ffffff?text=scRNA-seq+Clusters",
-      description: "Single-cell transcriptomics data from human tissue samples revealing cellular heterogeneity. Analysis of 10,000+ cells with 3,000+ genes, identifying distinct cell populations and developmental trajectories through dimensionality reduction.",
-      studySource: "Nature Cell Biology, 2024",
-      dataPoints: "30M+ expression values",
-      category: "Single-Cell",
-      color: "#2e7d32",
-      hasData: false // No data yet - show as "Coming Soon"
-    },
-    {
-      id: 5,
-      routeId: "metabolomics",
-      title: "Metabolomics Pathway Analysis",
-      icon: <DnsIcon />,
-      image: "https://via.placeholder.com/400x200/f57c00/ffffff?text=Metabolomics+Network",
-      description: "LC-MS metabolomics profiling comparing healthy vs disease states. Comprehensive analysis of 800+ metabolites across 60 plasma samples, revealing disrupted metabolic pathways and potential biomarkers for early diagnosis.",
-      studySource: "Metabolomics Journal, 2024",
-      dataPoints: "48,000+ metabolite peaks",
-      category: "Metabolomics", 
-      color: "#f57c00",
-      hasData: false
+      hasData: true
     },
     {
       id: 6,
-      routeId: "epigenomics",
-      title: "Epigenomic Chromatin States",
-      icon: <DatasetIcon />,
-      image: "https://via.placeholder.com/400x200/d32f2f/ffffff?text=ChIP-seq+Heatmap",
-      description: "ChIP-seq analysis of histone modifications across different cell types. Genome-wide profiling of H3K4me3, H3K27ac, and H3K27me3 marks revealing chromatin accessibility patterns and regulatory element activity in development.",
-      studySource: "Nature Genetics, 2024",
-      dataPoints: "500M+ genomic loci",
-      category: "Epigenomics",
-      color: "#d32f2f",
+      routeId: "single-cell",
+      title: "Single-Cell Transcriptomics",
+      image: "https://via.placeholder.com/400x200/2e7d32/ffffff?text=scRNA-seq+Clusters",
+      description: "Single-cell transcriptomics data from human tissue samples revealing cellular heterogeneity. Analysis of 10,000+ cells with 3,000+ genes, identifying distinct cell populations and developmental trajectories through dimensionality reduction.",
+      dataPoints: "30M+ expression values",
+      color: "#2e7d32",
       hasData: false
     },
-    {
-      id: 7,
-      routeId: "multi-omics",
-      title: "Multi-Omics Integration",
-      icon: <BarChartIcon />,
-      image: "https://via.placeholder.com/400x200/0288d1/ffffff?text=Multi-Omics+Matrix",
-      description: "Integrated analysis combining transcriptomics, proteomics, and metabolomics data from the same cohort. Multi-layer molecular profiling of 200 samples revealing cross-omics correlations and systems-level biological insights.",
-      studySource: "Nature Methods, 2024",
-      dataPoints: "100,000+ multi-omics features",
-      category: "Multi-Omics",
-      color: "#0288d1",
-      hasData: false
-    }
+    // {
+    //   id: 7,
+    //   routeId: "metabolomics",
+    //   title: "Metabolomics Pathway Analysis",
+    //   image: "https://via.placeholder.com/400x200/f57c00/ffffff?text=Metabolomics+Network",
+    //   description: "LC-MS metabolomics profiling comparing healthy vs disease states. Comprehensive analysis of 800+ metabolites across 60 plasma samples, revealing disrupted metabolic pathways and potential biomarkers for early diagnosis.",
+    //   dataPoints: "48,000+ metabolite peaks",
+    //   color: "#f57c00",
+    //   hasData: false
+    // },
+    // {
+    //   id: 8,
+    //   routeId: "epigenomics",
+    //   title: "Epigenomic Chromatin States",
+    //   image: "https://via.placeholder.com/400x200/d32f2f/ffffff?text=ChIP-seq+Heatmap",
+    //   description: "ChIP-seq analysis of histone modifications across different cell types. Genome-wide profiling of H3K4me3, H3K27ac, and H3K27me3 marks revealing chromatin accessibility patterns and regulatory element activity in development.",
+    //   dataPoints: "500M+ genomic loci",
+    //   color: "#d32f2f",
+    //   hasData: false
+    // },
+    // {
+    //   id: 9,
+    //   routeId: "multi-omics",
+    //   title: "Multi-Omics Integration",
+    //   image: "https://via.placeholder.com/400x200/0288d1/ffffff?text=Multi-Omics+Matrix",
+    //   description: "Integrated analysis combining transcriptomics, proteomics, and metabolomics data from the same cohort. Multi-layer molecular profiling of 200 samples revealing cross-omics correlations and systems-level biological insights.",
+    //   dataPoints: "100,000+ multi-omics features",
+    //   color: "#0288d1",
+    //   hasData: false
+    // }
   ];
 
   const handleExampleClick = (example) => {
@@ -487,7 +475,7 @@ const Examples = () => {
     }}>
       <Container maxWidth="xl">
         {/* Header Section */}
-        <Box sx={{ textAlign: 'center', marginBottom: 6 }}>
+        <Box sx={{ textAlign: 'center', marginBottom: 2 }}>
           <Typography
             variant="h4"
             component="h1"
@@ -495,7 +483,8 @@ const Examples = () => {
               fontWeight: 'bold',
               color: '#333',
               marginBottom: 2,
-              fontSize: { xs: '1.5rem', md: '1.5rem' }
+              fontSize: { xs: '1.5rem', md: '1.5rem' },
+              fontFamily: 'Arial, sans-serif'
             }}
           >
             ClusterChirp Examples
@@ -503,15 +492,13 @@ const Examples = () => {
           <Typography
             variant="h6"
             sx={{
-              color: '#666',
-              maxWidth: '1000px',
-              margin: '0 auto',
+              color: '#000',
               lineHeight: 1.6,
-              fontWeight: 'light'
+              fontWeight: 'light',
+              fontFamily: 'Arial, sans-serif'
             }}
           >
-            Discover the power of GPU-accelerated omics data visualization through real-world examples. 
-            Each showcase demonstrates AI-supported interactive exploration of high-dimensional biological datasets across various omics domains.
+            Try ClusterChirp with preloaded datasets to explore GPU-accelerated heatmaps, interactive visualization, and natural language commands.
           </Typography>
         </Box>
 
@@ -551,95 +538,85 @@ const Examples = () => {
                   image={example.image}
                   title={example.title}
                 />
-                <CardContent sx={{ 
-                  padding: 3, 
-                  flex: 1, 
-                  display: 'flex', 
-                  flexDirection: 'column' 
+                <CardContent sx={{
+                  padding: 1.5,
+                  paddingBottom: '12px !important',
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column'
                 }}>
-                  {/* Category and Icon */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <Chip 
-                      label={example.category} 
-                      size="small" 
-                      sx={{ 
-                        backgroundColor: example.color + '20',
-                        color: example.color,
-                        fontWeight: 'medium'
-                      }} 
-                    />
-                    <IconWrapper sx={{ backgroundColor: example.color }}>
-                      {example.icon}
-                    </IconWrapper>
+                  {/* Title and Links */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, marginBottom: 0.5 }}>
+                    <Typography
+                      variant="h6"
+                      component="h3"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: '#333',
+                        fontSize: '1.25rem',
+                        fontFamily: 'Arial, sans-serif'
+                      }}
+                    >
+                      {example.title}
+                    </Typography>
+                    {(example.tutorialLink || example.paperLink) && (
+                      <>
+                        {example.tutorialLink && (
+                          <Link
+                            href={example.tutorialLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{
+                              fontFamily: 'Arial, sans-serif',
+                              fontSize: '0.85rem',
+                              color: '#1976d2',
+                              textDecoration: 'none',
+                              '&:hover': { textDecoration: 'underline' }
+                            }}
+                          >
+                            [Tutorial]
+                          </Link>
+                        )}
+                        {example.paperLink && (
+                          <Link
+                            href={example.paperLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{
+                              fontFamily: 'Arial, sans-serif',
+                              fontSize: '0.85rem',
+                              color: '#1976d2',
+                              textDecoration: 'none',
+                              '&:hover': { textDecoration: 'underline' }
+                            }}
+                          >
+                            [{example.paperCitation}]
+                          </Link>
+                        )}
+                      </>
+                    )}
                   </Box>
-
-                  {/* Title */}
-                  <Typography
-                    variant="h6"
-                    component="h3"
-                    sx={{
-                      fontWeight: 'bold',
-                      color: '#333',
-                      marginBottom: 2,
-                      fontSize: '1.25rem'
-                    }}
-                  >
-                    {example.title}
-                  </Typography>
 
                   {/* Description */}
                   <Typography
                     variant="body2"
                     sx={{
                       color: '#666',
-                      lineHeight: 1.6,
-                      marginBottom: 3,
-                      flex: 1
+                      lineHeight: 1.4,
+                      marginBottom: 1,
+                      flex: 1,
+                      fontFamily: 'Arial, sans-serif'
                     }}
                   >
                     {example.description}
                   </Typography>
 
-                  {/* Study Info */}
-                  <Box sx={{ marginBottom: 2 }}>
-                    <Typography variant="caption" sx={{ color: '#888', display: 'block', marginBottom: 0.5 }}>
-                      <strong>Source:</strong> {example.studySource}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#888', display: 'block' }}>
-                      <strong>Scale:</strong> {example.dataPoints}
-                    </Typography>
-                  </Box>
-
-                  {/* Click Indicator */}
-                  <Box sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'space-between',
-                    paddingTop: 2,
-                    borderTop: '1px solid #eee'
-                  }}>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: example.hasData ? '#1976d2' : '#ff9800',
-                        fontWeight: 'medium'
-                      }}
-                    >
-                      {example.hasData ? 'Click to explore' : 'Coming soon'}
-                    </Typography>
-                    <IconButton
-                      size="small"
-                      sx={{
-                        backgroundColor: example.hasData ? '#1976d2' : '#ff9800',
-                        color: 'white',
-                        '&:hover': {
-                          backgroundColor: example.hasData ? '#1565c0' : '#f57c00',
-                        }
-                      }}
-                    >
-                      <ArrowForwardIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
+                  {/* Scale */}
+                  <Typography variant="body2" sx={{ color: '#000', display: 'block', fontWeight: 'bold', fontFamily: 'Arial, sans-serif', fontSize: '0.95rem' }}>
+                    Scale: {example.dataPoints}
+                  </Typography>
                 </CardContent>
               </StyledCard>
             </Grid>

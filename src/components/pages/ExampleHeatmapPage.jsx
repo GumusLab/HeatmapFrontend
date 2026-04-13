@@ -568,31 +568,31 @@ const EXAMPLES_CONFIG = {
   "genomics": {
     id: "genomics",
     title: "Gene Expression Analysis",
-    subtitle: "RNA-seq Cancer Research Study",
+    subtitle: "CPTAC RNA-seq Lung Cancer Study",
     icon: <Science sx={{ fontSize: 28, color: "#ffffff" }} />,
-    description: "Comprehensive RNA-seq analysis comparing tumor vs normal tissue samples revealing distinct clustering patterns between cancerous and healthy tissue",
+    description: "CPTAC RNA-seq whole transcriptome analysis of lung cancer tumor samples revealing distinct gene expression patterns",
     category: "Genomics",
     color: "#1E90FF",
     gradient: "linear-gradient(135deg, #1E90FF 0%, #4FB3FF 100%)",
-    dataPoints: "3M+ measurements",
-    studySource: "Nature Cancer Research, 2024",
-    sampleSize: "97 patients",
+    dataPoints: "30,931 genes × 98 samples (~3M measurements)",
+    studySource: "CPTAC - Clinical Proteomic Tumor Analysis Consortium",
+    sampleSize: "98 samples",
     dataType: "RNA-seq Expression",
     methodology: "Illumina NovaSeq 6000",
     paperLink:"https://www.cell.com/cancer-cell/fulltext/S1535-6108(23)00219-2"
   },
   "proteomics": {
-    id: "proteomics", 
+    id: "proteomics",
     title: "Proteomics Abundance Matrix",
     subtitle: "Mass Spectrometry Protein Quantification",
     icon: <Biotech sx={{ fontSize: 28, color: "#ffffff" }} />,
-    description: "RNA-seq whole transcriptome analysis of lung cancer vs. control samples",
-    category: "Proteomics", 
+    description: "CPTAC mass spectrometry-based protein quantification from tumor samples showing differential expression patterns",
+    category: "Proteomics",
     color: "#1E90FF",
     gradient: "linear-gradient(135deg, #1E90FF 0%, #4FB3FF 100%)",
-    dataPoints: "1.18M+ measurements",
-    studySource: "Journal of Proteome Research, 2024", 
-    sampleSize: "108 samples",
+    dataPoints: "10,908 proteins × 109 samples (~1.19M measurements)",
+    studySource: "CPTAC - Clinical Proteomic Tumor Analysis Consortium",
+    sampleSize: "109 samples",
     dataType: "MS/MS Quantification",
     methodology: "Orbitrap Fusion Lumos",
     paperLink:"https://www.cell.com/cancer-cell/fulltext/S1535-6108(23)00219-2"
@@ -607,12 +607,44 @@ const EXAMPLES_CONFIG = {
     category: "Immunogenomics",
     color: "#1E90FF",
     gradient: "linear-gradient(135deg, #1E90FF 0%, #4FB3FF 100%)",
-    dataPoints: "19.6M+ measurements",
-    studySource: "Harvard Medical School, Nature, 2014",
-    sampleSize: "980+ individuals",
+    dataPoints: "21,219 genes × 985 samples (~20.9M measurements)",
+    studySource: "ImmVar Project - Harvard Medical School, Nature, 2014",
+    sampleSize: "985 individuals",
     dataType: "Microarray Expression",
     methodology: "Affymetrix Human Gene 1.0 ST",
     paperLink:"https://pubmed.ncbi.nlm.nih.gov/24786080/"
+  },
+  "gu16257_data": {
+    id: "gu16257_data",
+    title: "Clinical Proteomics - Immunotherapy",
+    subtitle: "Olink PEA Immune Biomarker Profiling",
+    icon: <Biotech sx={{ fontSize: 28, color: "#ffffff" }} />,
+    description: "Immune biomarker profiling in cancer immunotherapy patients using Olink PEA technology",
+    category: "Proteomics",
+    color: "#1E90FF",
+    gradient: "linear-gradient(135deg, #1E90FF 0%, #4FB3FF 100%)",
+    dataPoints: "196 samples × 77 proteins (15,092 measurements)",
+    studySource: "Cancer Immunotherapy Clinical Trial, 2024",
+    sampleSize: "196 samples",
+    dataType: "Olink PEA",
+    methodology: "Proximity Extension Assay",
+    paperLink: "https://pubmed.ncbi.nlm.nih.gov/37783966/"
+  },
+  "mIHC_data": {
+    id: "mIHC_data",
+    title: "Spatial Proteomics - Tumor Microenvironment",
+    subtitle: "Multiplexed Immunohistochemistry Single-Cell Analysis",
+    icon: <Biotech sx={{ fontSize: 28, color: "#ffffff" }} />,
+    description: "mIHC single-cell spatial proteomics from 6 cancer patients with 8 cell types and 8 protein markers.",
+    category: "Spatial Proteomics",
+    color: "#1E90FF",
+    gradient: "linear-gradient(135deg, #1E90FF 0%, #4FB3FF 100%)",
+    dataPoints: "1,202 cells × 32 features (38,464 measurements)",
+    studySource: "Spatial Proteomics Research, 2024",
+    sampleSize: "1,202 cells (6 patients)",
+    dataType: "mIHC Spatial Proteomics",
+    methodology: "Multiplexed Immunohistochemistry",
+    paperLink: "https://www.nature.com/articles/s41551-025-01475-9"
   }
 };
 
@@ -625,6 +657,7 @@ function ExampleHeatmapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sessionId, setSessionId] = useState(null);
+  const [filteredStats, setFilteredStats] = useState(null);
 
   // Load data using backend API
   const loadDataFromBackend = async (id) => {
@@ -725,6 +758,11 @@ function ExampleHeatmapPage() {
       // Fallback: copy URL to clipboard
       navigator.clipboard.writeText(window.location.href);
     }
+  };
+
+  const handleStatsUpdate = (stats) => {
+    console.log('📊 Stats updated:', stats);
+    setFilteredStats(stats);
   };
 
   // Loading state
@@ -843,8 +881,11 @@ function ExampleHeatmapPage() {
                 opacity: 0.95,
                 lineHeight: 1.4,
                 fontSize: '0.9rem',
-                maxWidth: '600px',
-                fontWeight: 600
+                maxWidth: '900px',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               }}>
                 {example.description}
               </Typography>
@@ -852,35 +893,14 @@ function ExampleHeatmapPage() {
             </Box>
 
             {/* Center-Right: Sample Size and Data Points */}
-            <Box sx={{ 
+            <Box sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
               marginRight: 2
             }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <People sx={{ fontSize: 18, opacity: 0.8 }} />
-                <Box>
-                  <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', fontSize: '0.7rem',fontWeight: 600 }}>
-                    Sample Size
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                    {example.sampleSize}
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <DataUsage sx={{ fontSize: 18, opacity: 0.8 }} />
-                <Box>
-                  <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', fontSize: '0.7rem',fontWeight: 600 }}>
-                    Data Points
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                    {example.dataPoints}
-                  </Typography>
-                </Box>
-              </Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.85rem', fontFamily: 'Arial, sans-serif' }}>
+                Sample Size: {example.sampleSize} &nbsp;&nbsp;|&nbsp;&nbsp; Data Points: {example.dataPoints}
+              </Typography>
             </Box>
 
             {/* Right Side: Download and Share buttons */}
@@ -966,6 +986,7 @@ function ExampleHeatmapPage() {
               id={`${example.id}`}
               fileSelectedFlag={false}
               homepage={true}
+              onStatsUpdate={handleStatsUpdate}
             />
           ) : (
             <Box sx={{ 

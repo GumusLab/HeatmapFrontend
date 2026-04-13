@@ -134,7 +134,16 @@ export const post = <T>(path: string, data: any) => {
   return axios
     .post<T>(`${BASE_API_PATH}${path}`, payload, getHeaders(isFormData))
     .then((res) => res.data)
-    .catch(handleError);
+    .catch((error) => {
+      // Handle duplicate upload detection specifically
+      if (error.response?.status === 409 && error.response?.data?.error?.includes('Duplicate')) {
+        console.warn('⚠️ Duplicate upload detected by server - this is expected behavior');
+        console.warn('   The first upload was interrupted, browser auto-retried, server caught duplicate');
+        // Return a special error that the frontend can handle gracefully
+        throw new Error('DUPLICATE_UPLOAD_DETECTED');
+      }
+      handleError(error);
+    });
 };
 
 // HTTP DELETE Request
@@ -142,5 +151,5 @@ export const del = <T>(path: string) => {
   return axios
     .delete<T>(`${BASE_API_PATH}${path}`, getHeaders())
     .then((res) => res.data)
-    .catch(handleError);
+    .catch((error) => { handleError(error); });
 };

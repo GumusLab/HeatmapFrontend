@@ -1,5 +1,12 @@
 import { get, post } from './apiUtils';  // Adjust the path to where your post function is defined
 
+// TypeScript declaration for window.uploadTracker
+declare global {
+  interface Window {
+    uploadTracker?: { [key: string]: { timestamp: number } };
+  }
+}
+
 export const processHeatmapData = async (data: File): Promise<any> => {
 
 //   console.log('********* data is *******',data)
@@ -9,6 +16,24 @@ export const processHeatmapData = async (data: File): Promise<any> => {
   formData.append('data', data);
 
   try {
+    // 🕵️ DETECT IF BROWSER IS MAKING MULTIPLE CALLS
+    const fileKey = `${data.name}_${data.size}`;
+    if (!window.uploadTracker) window.uploadTracker = {};
+    
+    if (window.uploadTracker[fileKey]) {
+      const lastUpload = window.uploadTracker[fileKey];
+      const timeSince = Date.now() - lastUpload.timestamp;
+      console.log('🚨 BROWSER DUPLICATE DETECTED!', {
+        fileName: data.name,
+        fileSize: data.size,
+        timeSinceLastUpload: timeSince + 'ms',
+        lastTimestamp: new Date(lastUpload.timestamp).toISOString(),
+        currentTimestamp: new Date().toISOString()
+      });
+    }
+    
+    window.uploadTracker[fileKey] = { timestamp: Date.now() };
+    
     console.log('***** sending data to backend ******')
     const response = await post<any>('api/heatmapdata/process/', formData);
     console.log('***** response from backend ******',response)

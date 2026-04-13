@@ -1,5 +1,6 @@
 import DeckGL from '@deck.gl/react/typed';
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { merge } from 'lodash';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DeckGLHeatmapProps } from './DeckGLHeatmap.types';
@@ -16,10 +17,9 @@ import { useLabelState } from './state/useLabelState';
 import { useViewStates } from './state/useViewStates';
 import { useViews } from './state/useViews';
 import getTextWidth from './utils/getTextWidth';
-import {callChatGPT} from './backendApi/openAi'
 import {queryOllama} from './backendApi/ollama'
 import { DataStateShape, HeatmapStateShape } from './types';
-import { CATEGORY_LAYER_HEIGHT } from "./const";
+import { CATEGORY_LAYER_HEIGHT, CLUSTER_LAYER_HEIGHT, CLUSTER_LAYER_GAP } from "./const";
 import { createDataWorker } from './utils/workerFactory';
 import { dataWorkerCode } from './workers/data-worker-string';
 import HeatmapMinimap from './Heatmapminimap';
@@ -93,7 +93,8 @@ export const DeckGLHeatmap = ({
   showLoading,
   hideLoading,
   addNotification,
-  pvalData
+  pvalData,
+  onStatsUpdate
 }: DeckGLHeatmapProps) => {
 
 
@@ -114,7 +115,7 @@ export const DeckGLHeatmap = ({
   const [rowClustGroup,setRowClusterValue] = useState(5);
   const [OpacityValue,setOpacityValue] = useState(OPACITY);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
-  const [order, setOrder] = useState({row:"alphabetically",col:"alphabetically",rowCat: [] as string[],sortByRowCat:"",colCat: [] as string[],sortByColCat:""});
+  const [order, setOrder] = useState({row:"alphabetically",col:"alphabetically",rowCat: [] as string[],sortByRowCat:"",colCat: [] as string[],sortByColCat:"",sortColsByRowName: null as string | null});
   // const [order, setOrder] = useState();
   // const [catTemp, setCatTemp] = useState(categories);
   const [searchTerm,setSearchTerm] = useState("");
@@ -129,6 +130,9 @@ export const DeckGLHeatmap = ({
   const [isCropping, setIsCropping] = useState(false); // For enabling cropping mode
   const heatmapRef = useRef(null);  // Reference to the heatmap container
   const [filteredIdxDict,setFilteredIdxDict] = useState<CropBox|null>(null);
+  // Cropped indices (original data indices from visual selection)
+  const [croppedRowIndices, setCroppedRowIndices] = useState<number[] | null>(null);
+  const [croppedColIndices, setCroppedColIndices] = useState<number[] | null>(null);
 
   const [isMinimapEnabled, setIsMinimapEnabled] = useState(true);
 
@@ -162,21 +166,47 @@ export const DeckGLHeatmap = ({
   tooltipFunction = generateTooltipContent
 
   
-
-
 const stableOnClick = useMemo(() => ({
   heatmapCell: (info: any, event: any) => {
       // Handle internal logic first
-      if (info?.id === "row-cluster") {
-          setClickedClusterData({ Nodes: info.nodes, Group: info.text });
+      // Check if clicking on a cluster (either row or col)
+      if (info?.object?.id === "row-cluster" || info?.object?.id === "col-cluster") {
+          console.log('Cluster clicked:', info.object);
+          setClickedClusterData({ 
+              Nodes: info.object.nodes, 
+              Group: info.object.text,
+              filters: filters // Include current filters
+          });
           setIsTableVisible(true);
       }
       // Then, call the handler passed from the parent if it exists
       onClick?.heatmapCell?.(info, event);
   },
-  rowLabel: onClick?.rowLabel,
+  rowLabel: (info: any, event: any) => {
+      // Sort columns by this row's values
+      console.log('🖱️ Row label clicked:', info);
+      if (info?.index !== undefined && dataStateRef.current?.rowLabels) {
+          const rowName = dataStateRef.current.rowLabels[info.index]?.text;
+          console.log('📍 Row name extracted:', rowName);
+          if (rowName) {
+              console.log('✅ Setting order with sortColsByRowName:', rowName);
+              setOrder((prev) => {
+                  const newOrder = {
+                      ...prev,
+                      col: "", // Clear standard column sorting
+                      sortByColCat: "", // Clear category-based column sorting
+                      sortColsByRowName: rowName // Store row name for column sorting
+                  };
+                  console.log('📝 New order state:', newOrder);
+                  return newOrder;
+              });
+          }
+      }
+      // Then, call the handler passed from the parent if it exists
+      onClick?.rowLabel?.(info, event);
+  },
   columnLabel: onClick?.columnLabel,
-}), [onClick]); // This now correctly depends on the prop from the parent.
+}), [onClick, filters]); // This now correctly depends on the prop from the parent and filters.
 
 
 
@@ -195,11 +225,11 @@ const handlePathwaySelect = async (selectedPathway) => {
     hideLoading();
     
     if ("error" in res) {
-      addNotification({ 
-        type: 'error', 
-        title: 'Pathway Filter Error', 
-        message: `Could not filter by pathway: ${res.error}`, 
-        autoHide: false 
+      addNotification({
+        type: 'error',
+        title: 'Pathway Filter Error',
+        message: `Could not filter by pathway: ${res.error}`,
+        duration: 5000
       });
       return;
     }
@@ -230,7 +260,7 @@ const handlePathwaySelect = async (selectedPathway) => {
       type: 'error',
       title: 'Pathway Selection Error',
       message: error.message || 'Could not apply pathway filter',
-      autoHide: false
+      duration: 5000
     });
   }
 };
@@ -259,13 +289,23 @@ const handleOllamaSendClick = async (message: string): Promise<{ success: boolea
 
     // --- Handle Errors from AI/Backend ---
     if ("error" in res) {
-        const errorMessage = `Sorry, I couldn't process that. ${res.error}`;
-        addNotification({ type: 'error', title: 'Command Error', message: errorMessage, autoHide: false });
-        return { success: false, message: errorMessage };
+        const suggestions = (res as any).suggestions as string[] | undefined;
+        let errorMessage = res.error || "Sorry, I couldn't process that command.";
+        let chatMessage = errorMessage; // Short version for chat history
+        if (suggestions && suggestions.length > 0) {
+            errorMessage += '\n' + suggestions.map(s => `• ${s}`).join('\n');
+        }
+        addNotification({
+            type: suggestions ? 'info' : 'error',
+            title: suggestions ? 'Try These Commands' : 'Command Error',
+            message: errorMessage,
+            duration: 10000
+        });
+        return { success: false, message: chatMessage };
     }
     if (!("action" in res)) {
-        const errorMessage = "I couldn't determine an action from your command. Please try rephrasing.";
-        addNotification({ type: 'error', title: 'Command Unclear', message: errorMessage, autoHide: false });
+        const errorMessage = "I couldn't determine an action from your command. Try: \"Cluster rows\", \"Sort by variance\", or \"Search for BRCA1\".";
+        addNotification({ type: 'error', title: 'Command Unclear', message: errorMessage, duration: 8000 });
         throw new Error(errorMessage);
     }
     
@@ -301,6 +341,44 @@ const handleOllamaSendClick = async (message: string): Promise<{ success: boolea
             : clustering_result;
         
         filteredData.current = parsedResult;
+        
+        // ✅ Auto-switch to cluster order when linkage or distance is changed
+        // This ensures the user sees the effect of clustering parameter changes
+        if (action === "set_linkage" || action === "set_distance" || action === "set_clustering") {
+            setOrder((prev) => ({
+                ...prev,
+                row: 'cluster',
+                col: 'cluster',
+                sortByRowCat: "",
+                sortByColCat: "",
+                sortColsByRowName: null
+            }));
+
+            // Build notification message based on action type
+            let notificationTitle = 'Clustering Updated';
+            let notificationMessage = '';
+
+            if (action === "set_clustering") {
+                const distance = res.distance || 'correlation';
+                const linkage = res.linkage || 'average';
+                notificationTitle = 'Clustering Parameters Updated';
+                notificationMessage = `Distance: "${distance}", Linkage: "${linkage}". Rows and columns now sorted by cluster order.`;
+            } else if (action === "set_linkage") {
+                notificationTitle = 'Linkage Updated';
+                notificationMessage = `Linkage method set to "${value}". Rows and columns now sorted by cluster order.`;
+            } else {
+                notificationTitle = 'Distance Updated';
+                notificationMessage = `Distance metric set to "${value}". Rows and columns now sorted by cluster order.`;
+            }
+
+            addNotification({
+                type: 'success',
+                title: notificationTitle,
+                message: notificationMessage,
+                duration: 5000,
+            });
+        }
+        
         setDataVersion(prev => prev + 1); // This will trigger the worker and its own notifications
 
     } else {
@@ -312,16 +390,50 @@ const handleOllamaSendClick = async (message: string): Promise<{ success: boolea
             // The existing notifySortStarted/notifyClusteringStarted will be called
             // automatically when the setOrder state change is detected.
             if (target === "rows") {
-                setOrder((prev) => ({ ...prev, row: value || 'cluster', sortByRowCat: "" }));
+                setOrder((prev) => ({
+                    ...prev,
+                    row: value || 'cluster',
+                    sortByRowCat: "",
+                    sortColsByRowName: null  // Clear gene-based column sorting
+                }));
             } else if (target === "columns" || target === "cols") {
-                setOrder((prev) => ({ ...prev, col: value || 'cluster', sortByColCat: "" }));
+                setOrder((prev) => ({ ...prev, col: value || 'cluster', sortByColCat: "", sortColsByRowName: null }));
+            } else if (target === "both") {
+                // Handle compound command - cluster both rows and columns
+                setOrder((prev) => ({
+                    ...prev,
+                    row: value || 'cluster',
+                    col: value || 'cluster',
+                    sortByRowCat: "",
+                    sortByColCat: "",
+                    sortColsByRowName: null
+                }));
             }
         } else if (action === "sort_by_meta") {
             if (target === "rows") {
-                setOrder((prev) => ({ ...prev, row: "", sortByRowCat: value }));
+                setOrder((prev) => ({
+                    ...prev,
+                    row: "",
+                    sortByRowCat: value,
+                    sortColsByRowName: null  // Clear gene-based column sorting
+                }));
             } else if (target === "columns" || target === "cols") {
-                setOrder((prev) => ({ ...prev, col: "", sortByColCat: value }));
+                setOrder((prev) => ({ ...prev, col: "", sortByColCat: value, sortColsByRowName: null }));
             }
+        } else if (action === "sort_by_expression") {
+            // Sort columns by a specific gene's expression values
+            setOrder((prev) => ({
+                ...prev,
+                col: "",              // Clear standard column sorting
+                sortByColCat: "",     // Clear category-based column sorting
+                sortColsByRowName: value  // value is the gene name (e.g., "FASLG")
+            }));
+            addNotification({
+                type: 'info',
+                title: 'Sorting by Expression',
+                message: `Sorting columns by ${value} expression values`,
+                duration: 3000,
+            });
         } else if (action === "set_opacity") {
             // Parse the opacity value from the command
             let newOpacityValue = OpacityValue; // Start with current value
@@ -397,7 +509,7 @@ const handleOllamaSendClick = async (message: string): Promise<{ success: boolea
         type: 'error',
         title: 'An Unexpected Error Occurred',
         message: error.message || 'Could not complete the request.',
-        autoHide: false
+        duration: 5000
     });
     throw error;
   }
@@ -628,30 +740,28 @@ const isColCatValid =
 // };
 
 const handleMouseDown = (event: any) => {
-  console.log('******* again coming in the handle mouse down and is cropping is *********', isCropping)
-  
-  // MOVE THESE LINES TO THE TOP - prevent event FIRST when cropping
-  if (isCropping) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    console.log('🔍 CROP - Starting crop selection');
-    
-    const element = heatmapRef.current;
-    if (!element) return;
-    
-    const { x, y } = getRelativePosition(event, element);
+  // Only process if cropping mode is enabled
+  if (!isCropping) return; // Let DeckGL handle panning
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const element = heatmapRef.current;
+  if (!element) return;
+
+  const { x, y } = getRelativePosition(event, element);
+
+  // Only start cropping if click is within the heatmap area (not in label regions)
+  if (x >= rowLabelsWidth && y >= colLabelsWidth) {
     setIsDrawing(true);
     setCropBox({ startX: x, startY: y, endX: x, endY: y });
   }
-  // If not cropping, let DeckGL handle panning (do nothing)
 };
 
-// Enhanced mouse up handler 
+// Enhanced mouse up handler
 const handleMouseUp = (event: any) => {
   if (!isDrawing) return;
-  
-  console.log('🔍 CROP - Crop selection completed');
+
   setIsDrawing(false);
   setIsCropping(false)
   
@@ -661,15 +771,13 @@ const handleMouseUp = (event: any) => {
   setToastOpen(true);
 };
 
-// Enhanced mouse move handler 
+// Enhanced mouse move handler
 const handleMouseMove = (event: MouseEvent) => {
   if (!isDrawing || !isCropping) return;
-  
-  console.log('🔍 CROP - CropPING IT IN mouse move');
 
   const element = heatmapRef.current;
   if (!element) return;
-  
+
   const { x, y } = getRelativePosition(event, element);
   setCropBox((prevBox) => {
     if (!prevBox) return null;
@@ -677,39 +785,25 @@ const handleMouseMove = (event: MouseEvent) => {
   });
 };
 
-// Enhanced enable cropping 
+// Enhanced enable cropping
 const enableCropping = () => {
-  console.log('🔍 CROP - Enabling cropping mode');
   setIsCropping(true);
   setCropBox(null);
   setIsDrawing(false);
-  
+
   // Show user instruction
   setToastMessage("🎯 Cropping mode activated! Click and drag to select an area. Press ESC to cancel.");
   setToastSeverity('info');
   setToastOpen(true);
 };
 
-// Enhanced reset function 
-const resetFilteredDict = () => {
-  setFilteredIdxDict(null);
-  setCropBox(null);
-  setIsCropping(false);
-  setIsDrawing(false);
-  
-  // Show reset message
-  setToastMessage("🔄 Crop filter cleared! Showing full heatmap.");
-  setToastSeverity('success');
-  setToastOpen(true);
-};
+// Note: resetFilteredDict is defined after useViewStates call to access resetViewToOrigin
 
-// NEW function - Add this function
 const cancelCropping = () => {
-  console.log('🔍 CROP - Canceling cropping mode');
   setIsCropping(false);
   setIsDrawing(false);
   setCropBox(null);
-  
+
   // Show cancel message
   setToastMessage("❌ Cropping canceled");
   setToastSeverity('info');
@@ -733,11 +827,40 @@ useEffect(() => {
 
 // ✅ Update the handleRenderHeatmap function to accept current filters
 const handleRenderHeatmap = (currentFilters: any) => {
-  console.log('Rendering heatmap with filters:', currentFilters);
-  
-  getRefreshHeatmap(sessionID, currentFilters).then((res) => {
+  // If there's an active crop, include the cropped row/column names in the filters
+  let filtersWithCrop = { ...currentFilters };
+
+  if (filteredIdxDict && dataStateRef.current) {
+    const { rowLabels, colLabels } = dataStateRef.current;
+
+    // Extract the cropped row and column names
+    const croppedRows = rowLabels
+      .slice(filteredIdxDict.startY, filteredIdxDict.endY + 1)
+      .map((label: any) => label.text);
+    const croppedCols = colLabels
+      .slice(filteredIdxDict.startX, filteredIdxDict.endX + 1)
+      .map((label: any) => label.text);
+
+    filtersWithCrop = {
+      ...currentFilters,
+      cropFilter: {
+        rows: croppedRows,
+        cols: croppedCols,
+        rowIndices: { start: filteredIdxDict.startY, end: filteredIdxDict.endY },
+        colIndices: { start: filteredIdxDict.startX, end: filteredIdxDict.endX }
+      }
+    };
+  }
+
+  getRefreshHeatmap(sessionID, filtersWithCrop).then((res) => {
     if ("error" in res) {
         console.error("Heatmap Error:", res.error);
+        addNotification({
+          type: 'error',
+          title: 'Heatmap Error',
+          message: typeof res.error === 'string' ? res.error : 'Failed to refresh heatmap data.',
+        });
+        hideLoading();
         return;
     }
 
@@ -745,16 +868,37 @@ const handleRenderHeatmap = (currentFilters: any) => {
 
     if (clustering_result) {
         try {
-            const parsedResult = typeof clustering_result === 'string' 
-                ? JSON.parse(clustering_result) 
+            const parsedResult = typeof clustering_result === 'string'
+                ? JSON.parse(clustering_result)
                 : clustering_result;
-                                    
+
             filteredData.current = parsedResult;
+
+            // If we applied a crop filter, clear it since the new data is already cropped
+            if (filteredIdxDict) {
+              setFilteredIdxDict(null);
+              setCropBox(null);
+              resetViewToOrigin();
+            }
+
             setDataVersion(prev => prev + 1);
         } catch (err) {
             console.error("❌ Error processing clustering result:", err);
+            addNotification({
+              type: 'error',
+              title: 'Processing Error',
+              message: 'Failed to parse clustering result from server.',
+            });
         }
     }
+  }).catch((err) => {
+    console.error("❌ Network error refreshing heatmap:", err);
+    addNotification({
+      type: 'error',
+      title: 'Connection Error',
+      message: 'Failed to connect to the server. Please check that the backend is running.',
+    });
+    hideLoading();
   });
 };
 
@@ -935,17 +1079,35 @@ const dimensions = useDimensions(container);
 
     // This function will handle all messages coming FROM the worker
     const handleMessage = (event: MessageEvent) => {
+      console.log('📥 Received message from worker:', event.data);
       let wasDataUpdated = false;
 
       // Check if the worker sent back a new data state (from a sort/cluster)
       if (event.data.dataState) {
+        console.log('✅ DataState received from worker, updating...');
         dataStateRef.current = event.data.dataState;
         setDataStateVersion(prev => prev + 1);
         wasDataUpdated = true;
+
+        // Calculate and report stats
+        if (onStatsUpdate && event.data.dataState) {
+          const sampleSize = event.data.dataState.rowLabels?.length || 0;
+          const numColumns = event.data.dataState.colLabels?.length || 0;
+          const dataPoints = sampleSize * numColumns;
+          console.log('📊 DeckGL stats calculated:', { sampleSize, numColumns, dataPoints });
+          if (sampleSize > 0 && numColumns > 0) {
+            onStatsUpdate({ sampleSize, dataPoints });
+          }
+        }
       }
-      
+
       // Check if the worker sent back a new heatmap state (from a resize)
       if (event.data.heatmapState) {
+        console.log('✅ HeatmapState received from worker:', {
+          width: event.data.heatmapState.width,
+          height: event.data.heatmapState.height,
+          cellDimensions: event.data.heatmapState.cellDimensions
+        });
         heatmapStateRef.current = event.data.heatmapState;
         setHeatmapStateVersion(prev => prev + 1);
       }
@@ -975,7 +1137,11 @@ const dimensions = useDimensions(container);
 
     const handleError = (error: ErrorEvent) => {
       console.error("Worker error:", error);
-      // You could call a generic error notification function here if you created one
+      addNotification({
+        type: 'error',
+        title: 'Processing Error',
+        message: 'An error occurred while processing heatmap data. Please try reloading.',
+      });
     };
 
     // Attach the fresh, up-to-date handlers to the worker
@@ -1001,16 +1167,19 @@ const dimensions = useDimensions(container);
           data: dataToUse,
           order,
           catTemporary,
+          // Send cropped indices (original data indices from visual selection)
+          croppedRowIndices,
+          croppedColIndices,
           messageType: 'dataState',
         });
       } catch (error) {
         console.error("Failed to send data to worker:", error);
       }
     }
-  }, [data, order, dataVersion]); // Assuming these are your correct dependencies
+  }, [data, order, dataVersion, croppedRowIndices, croppedColIndices]);
 
 
-  // HOOK 4: Sends UI Dimension updates TO the worker. (This is your original code, it's correct)
+  // HOOK 4: Sends UI Dimension updates TO the worker.
   useEffect(() => {
     if (workerRef.current && dimensions) {
       workerRef.current.postMessage({
@@ -1043,178 +1212,122 @@ useLabelState(
   
       
 
-  if(order.colCat.length >= 0 && rowLabelsWidth > 0 && colLabelsWidth > 0) {
-  const containerElement: HTMLDivElement = container;
-  
-  // First remove ALL previous column category labels using the specific class
-  const oldLabels = containerElement.querySelectorAll('.col-category-label');
-  oldLabels.forEach(label => {
-    containerElement.removeChild(label);
-  });
-  
-  // Then create new labels
-  for(let i = 0; i < order.colCat.length; i++) {
-    const label = document.createElement('label');
-    
-    // Create clean IDs with consistent handling of spaces for all labels
-    let labelId = order.colCat[i];
-    labelId = labelId.split(' ').join('_');
-    if(labelId.includes('#')) {
-      labelId = labelId.replace('#', 'no');
+  // Category label DOM — only rebuild when order/layout actually changes, not on every zoom frame
+  useEffect(() => {
+    if (!container) return;
+    const containerElement = container as HTMLDivElement;
+
+    // --- Column category labels ---
+    if (order.colCat.length >= 0 && rowLabelsWidth > 0 && colLabelsWidth > 0) {
+      const oldLabels = containerElement.querySelectorAll('.col-category-label');
+      oldLabels.forEach(label => containerElement.removeChild(label));
+
+      for (let i = 0; i < order.colCat.length; i++) {
+        const label = document.createElement('label');
+        let labelId = order.colCat[i].split(' ').join('_');
+        if (labelId.includes('#')) labelId = labelId.replace('#', 'no');
+        label.id = labelId;
+        label.className = 'col-category-label';
+        label.style.position = 'absolute';
+        const initialGap = INITIAL_GAP;
+        const gap = LAYER_GAP;
+        const clusterOffset = order.col === 'cluster' ? (CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP) : 0;
+        const yPosition = colLabelsWidth - initialGap - clusterOffset - ((i + 1) * (CATEGORY_LAYER_HEIGHT + gap));
+        label.style.top = `${yPosition}px`;
+        label.textContent = `${capitalizeFirstLetter(order.colCat[i])}`;
+        if (order.col !== 'cluster') {
+          const catName = order.colCat[i];
+          label.addEventListener('click', () => {
+            setOrder((prevOrder: any) => ({ ...prevOrder, sortByColCat: catName }));
+          });
+        }
+        const offset = labels?.row?.offset ? labels.row.offset : DEFAULT_LABEL_OFFSET + 2;
+        label.style.fontSize = `${CATEGORY_LAYER_HEIGHT}px`;
+        label.style.fontFamily = 'Arial, sans-serif';
+        label.style.fontWeight = 'bold';
+        const labelFont = `normal ${label.style.fontSize} ${label.style.fontFamily}`;
+        const width = getTextWidth(label.textContent, labelFont);
+        label.style.width = `${width}px`;
+        label.style.color = '#333333';
+        label.style.textAlign = 'right';
+        label.style.left = isDrawerOpen ? `${panelWidth + rowLabelsWidth - width - offset}px` : `${rowLabelsWidth - width - offset}px`;
+        containerElement.appendChild(label);
+      }
     }
-    
-    label.id = labelId;
-    label.className = 'col-category-label'; // Added the specific class name
-    
-    label.style.position = 'absolute';
-    const initialGap = 1;
-    const gap = 1;
-    const yPosition = colLabelsWidth - initialGap - ((i+1) * (CATEGORY_LAYER_HEIGHT*2 +gap )) - (i+1+1)*2;
-    label.style.top = `${yPosition}px`;
-    label.textContent = `${capitalizeFirstLetter(order.colCat[i])}`;
-    
-    if(order.row !== 'cluster') {
-      label.addEventListener('click', () => {
-        setOrder((prevOrder:any) => ({ ...prevOrder, sortByColCat:order.colCat[i]}));
+
+    // --- Row category labels ---
+    if (order.rowCat.length > 0 && rowLabelsWidth > 0 && colLabelsWidth > 0) {
+      const oldRowLabels = containerElement.querySelectorAll('.row-category-label');
+      oldRowLabels.forEach(label => containerElement.removeChild(label));
+
+      order.rowCat.forEach((cat, i) => {
+        let labelId = cat.split(' ').join('_');
+        if (labelId.includes('#')) labelId = labelId.replace('#', 'no');
+        const label = document.createElement('label');
+        label.id = labelId;
+        label.className = 'row-category-label';
+        label.style.position = 'absolute';
+        label.textContent = capitalizeFirstLetter(cat);
+        if (order.row !== 'cluster') {
+          label.addEventListener('click', () => {
+            setOrder(prev => ({ ...prev, sortByRowCat: cat, sortColsByRowName: null }));
+          });
+        }
+        label.style.fontSize = `${CATEGORY_LAYER_HEIGHT}px`;
+        label.style.fontFamily = 'Arial, sans-serif';
+        label.style.fontWeight = 'bold';
+        const font = `normal ${label.style.fontSize} ${label.style.fontFamily}`;
+        const width = getTextWidth(label.textContent, font);
+        label.style.width = `${width}px`;
+        label.style.color = '#333333';
+        label.style.textAlign = 'right';
+        label.style.cursor = order.row !== 'cluster' ? 'pointer' : 'default';
+        const gap = LAYER_GAP;
+        const catH = CATEGORY_LAYER_HEIGHT;
+        const initialGap = INITIAL_GAP;
+        const clusterOffset = order.row === 'cluster' ? (CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP) : 0;
+        const xPos = panelWidth + rowLabelsWidth - initialGap - clusterOffset - ((i + 1) * (catH + gap)) + catH;
+        const yPos = (heatmapStateRef.current?.height || 0) + colLabelsWidth + 5;
+        label.style.left = `${xPos}px`;
+        label.style.top = `${yPos}px`;
+        label.style.transform = 'rotate(90deg)';
+        label.style.transformOrigin = 'top left';
+        containerElement.appendChild(label);
       });
     }
-    
-    const offset = labels?.row?.offset ? labels.row.offset : DEFAULT_LABEL_OFFSET + 2;
-    label.style.fontSize = `${CATEGORY_LAYER_HEIGHT*2}px`;
-    label.style.fontFamily = 'Arial, sans-serif';
-    label.style.fontWeight = '525';
-    const labelFont = `normal ${label.style.fontSize} ${label.style.fontFamily}`;
-    const width = getTextWidth(label.textContent, labelFont);
-    label.style.width = `${width}px`;
-    label.style.color = '#333333';
-    label.style.textAlign = 'right';
-    label.style.left = isDrawerOpen ? `${panelWidth + rowLabelsWidth - width - offset}px`:`${rowLabelsWidth - width - offset}px`;
-    
-    containerElement.appendChild(label);
-  }
-}
-
-  // if(order.rowCat.length >= 0 && rowLabelsWidth>0 && colLabelsWidth>0 && container && dimensions && heatmapStateRef.current?.height){
-  //   const containerElement = container;
-  //   const rowCategoryNames = Object.keys(categories.row);
-  //   for(let i = 0;i<rowCategoryNames.length;i++){
-
-  //     const labelToRemove = rowCategoryNames[i].includes('#') ?containerElement.querySelector(`#${rowCategoryNames[i].replace('#','no').split(' ').join('_')}`): containerElement.querySelector(`#${rowCategoryNames[i]}`);
-  //     if(labelToRemove && containerElement.contains(labelToRemove)){
-  //       containerElement.removeChild(labelToRemove);
-  //     }
-  //   }
-   
-  //  for(let i = 0;i<order.rowCat.length;i++){
-  //   const label = document.createElement('label');
-  //   label.id = order.rowCat[i].includes('#')?`${order.rowCat[i].replace('#','no').split(' ').join('_')}` :`${order.rowCat[i]}`;
-  //   label.style.position = 'absolute';
-  //   // label.style.top = `${dimensions[1]-0.1*dimensions[1]+ 5}px`
-  //   label.style.top = `${heatmapStateRef.current?.height}px`
-
-  
-  //   label.textContent = `${capitalizeFirstLetter(order.rowCat[i])}`;
-  //   if(order.row !== 'cluster'){
-  //   label.addEventListener('click',()=>{
-  //     setOrder((prevOrder:any) => ({ ...prevOrder, sortByRowCat:order.rowCat[i]}))
-  //   });}
-  //   const offset = labels?.row?.offset ? labels.row.offset: DEFAULT_LABEL_OFFSET + 2;
-  //   label.style.fontSize = '14px';
-  //   label.style.fontFamily = 'Arial, sans-serif';
-  //   label.style.fontWeight = '525';
-  //   const labelFont = `normal ${label.style.fontSize} ${label.style.fontFamily}`;
-  //   const width = getTextWidth(label.textContent,labelFont)
-  //   label.style.width = `${width}px`;
-  //   label.style.color = '#333333';
-  //   label.style.textAlign= 'right';
-  //   /*We added 10 pixel because the panel icon has 10 pixel width */
-  //    // Rotate the label to be vertical
-  //    label.style.transform = 'rotate(90deg)';
-  //    label.style.transformOrigin = 'top left';
-  //    const initialGap = INITIAL_GAP;
-  //    const gap = LAYER_GAP;
-  //    const halfViewWidth = rowLabelsWidth;
-  //    const categoryHeight = CATEGORY_LAYER_HEIGHT;
-
-  //    const xPosition = panelWidth + halfViewWidth - 2*i*(categoryHeight + gap); 
-
-  //   label.style.left = `${xPosition}px` //isDrawerOpen?`${190+rowLabelsWidth-width-offset}px`:`${30+rowLabelsWidth-width-offset}px`;
-  //   // label.style.border = '1px solid black';
-  //   containerElement.appendChild(label);
-
-  // }
-
-  // }
-
-  if (order.rowCat.length > 0 && rowLabelsWidth > 0 && colLabelsWidth > 0 && container) {
-    const containerElement = container as HTMLDivElement;
-  
-    // 1) Remove all existing row‑category labels by class
-    const oldRowLabels = containerElement.querySelectorAll('.row-category-label');
-    oldRowLabels.forEach(label => containerElement.removeChild(label));
-  
-    // 2) Create new ones
-    order.rowCat.forEach((cat, i) => {
-      // sanitize an ID just like you do for columns
-      let labelId = cat.split(' ').join('_');
-      if (labelId.includes('#')) {
-        labelId = labelId.replace('#', 'no');
-      }
-  
-      const label = document.createElement('label');
-      label.id = labelId;
-      label.className = 'row-category-label';
-      label.style.position = 'absolute';
-  
-      // place it at the bottom of the heatmap
-      label.style.top = `${heatmapStateRef.current!.height + colLabelsWidth/2}px`;
-  
-      label.textContent = capitalizeFirstLetter(cat);
-  
-      if (order.row !== 'cluster') {
-        label.addEventListener('click', () => {
-          setOrder(prev => ({ ...prev, sortByRowCat: cat }));
-        });
-      }
-  
-      // styling
-      const offset = labels?.row?.offset ?? DEFAULT_LABEL_OFFSET + 2;
-      label.style.fontSize = '14px';
-      label.style.fontFamily = 'Arial, sans-serif';
-      label.style.fontWeight = '525';
-      const font = `normal ${label.style.fontSize} ${label.style.fontFamily}`;
-      const width = getTextWidth(label.textContent, font);
-      label.style.width = `${width}px`;
-      label.style.color = '#333333';
-      label.style.textAlign = 'right';
-  
-      // rotate it vertical
-      label.style.transform = 'rotate(90deg)';
-      label.style.transformOrigin = 'top left';
-  
-      // compute its X position (mirror your column logic)
-      const gap = LAYER_GAP;                      // e.g. 1
-      const catH = CATEGORY_LAYER_HEIGHT;         // same as for columns
-      const xPos = panelWidth + rowLabelsWidth - 2*i * (catH + gap);
-  
-      label.style.left = `${xPos}px`;
-  
-      containerElement.appendChild(label);
-    });
-  }
+  }, [order.colCat, order.rowCat, order.col, order.row, rowLabelsWidth, colLabelsWidth, panelWidth, isDrawerOpen, labels?.row?.offset, container]);
   
 
 
-  const { viewStates, onViewStateChange, visibleIndices,isZoomedOut } = useViewStates(
+  const { viewStates, onViewStateChange, visibleBounds, isZoomedOut, resetViewToOrigin } = useViewStates(
     container,
     dimensions,
     heatmapStateRef.current,
     dataStateRef.current,
     panelWidth,
     searchTerm, // Add the search term parameter
-    colLabelsWidth // Add the column labels width parameter
+    colLabelsWidth, // Add the column labels width parameter
+    null // Data is already cropped by computeDataState, pan constraints use dataState dimensions
   );
-  
+
+  // Reset function - clears crop and resets view to show full heatmap
+  const resetFilteredDict = () => {
+    setFilteredIdxDict(null);
+    setCropBox(null);
+    setIsCropping(false);
+    setIsDrawing(false);
+    // Clear cropped indices to trigger worker to load full data
+    setCroppedRowIndices(null);
+    setCroppedColIndices(null);
+
+    // Reset view to origin for the full heatmap
+    resetViewToOrigin();
+
+    // Show reset message
+    setToastMessage("🔄 Crop filter cleared! Showing full heatmap.");
+    setToastSeverity('success');
+    setToastOpen(true);
+  };
 
   const views = useViews({
     colLabelsWidth,
@@ -1277,10 +1390,13 @@ useLabelState(
         return [];
     }
 
+    // Note: When filteredIdxDict is active, computeDataState already produces cropped data.
+    // So we pass null to layers - they don't need to filter again since data is already cropped.
+    // The layers will use dataState.numRows/numColumns which reflect the cropped dimensions.
     return getLayers({
         dataState: dataStateRef.current,
         heatmapState: heatmapStateRef.current,
-        visibleIndices,
+        visibleBounds,
         viewStates,
         onClick: stableOnClick, // Use the new stable onClick object
         labels,
@@ -1298,24 +1414,26 @@ useLabelState(
         pvalThreshold: 0.05, // Example pvalThreshold
         pvalData,
         isZoomedOut,
-        filteredIdxDict
+        filteredIdxDict: null // Data is already cropped by computeDataState, no need to filter in layers
     });
 }, [
-    // List only the primitive values or STABLE objects/arrays that cause a visual change.
+    // ZOOM OPTIMIZATION (2026-01-04):
+    // - viewStates REMOVED: Changes every zoom frame, causing expensive layer recreation.
+    //   DeckGL handles viewState internally via its viewState prop.
+    // - visibleIndices REPLACED with visibleBounds: Bounds is more stable and sufficient
+    //   for layer rendering. visibleIndices changed too frequently during zoom.
+    // See ZOOM_OPTIMIZATION_NOTES.md for full details.
     datastateVersion,
     heatmapstateVersion,
-    visibleIndices,
-    viewStates,
-    stableOnClick, // Dependency is now stable
+    visibleBounds, // OPTIMIZATION: Use bounds instead of visibleIndices
+    // visibleIndices, // REMOVED - changes too frequently during zoom
+    // viewStates, // REMOVED - changes every zoom frame
+    stableOnClick,
     labels,
-    // debug,
     colLabelsWidth,
     rowLabelsWidth,
-    // rowLabelsTitle,
-    // columnLabelsTitle,
     searchTerm,
     order,
-    // categories,
     rowClustGroup,
     colClustGroup,
     OpacityValue,
@@ -1337,76 +1455,154 @@ useLabelState(
                             unit={unit}
                             />
 
-  // onClick handler to download matrix as csv file
+  // onClick handler to download matrix as TSV file (using current dataState - what user sees)
   const downloadMatrix = () => {
+    const currentDataState = dataStateRef.current;
 
-    const rowLabelArr: any[] = []
-    for (let i=0; i<(data.row_nodes).length; i++){
-      rowLabelArr.push(data.row_nodes[i].name)
-
+    if (!currentDataState) {
+      console.warn('No data available for download');
+      return;
     }
 
-    const colLabelArr: any[] = ['']
-    for (let i=0; i<data.col_nodes.length; i++){
-      colLabelArr.push(data.col_nodes[i].name)
+    const { values, numRows, numColumns, rowLabels, colLabels } = currentDataState;
+
+    // Get unique category keys for rows and columns
+    const rowCategoryKeys: string[] = [];
+    const colCategoryKeys: string[] = [];
+
+    const rowCatSet = new Set<string>();
+    rowLabels.forEach(row => {
+      if (row.category) {
+        Object.keys(row.category).forEach(key => rowCatSet.add(key));
+      }
+    });
+    rowCategoryKeys.push(...Array.from(rowCatSet));
+
+    const colCatSet = new Set<string>();
+    colLabels.forEach(col => {
+      if (col.category) {
+        Object.keys(col.category).forEach(key => colCatSet.add(key));
+      }
+    });
+    colCategoryKeys.push(...Array.from(colCatSet));
+
+    // Number of empty prefix cells = 1 (row name) + number of row categories
+    const numPrefixCells = 1 + rowCategoryKeys.length;
+
+    const tsvRows: string[] = [];
+
+    // Row 1: Empty cells + Column names
+    const headerRow: string[] = Array(numPrefixCells).fill('');
+    headerRow.push(...colLabels.map(col => col.text));
+    tsvRows.push(headerRow.join('\t'));
+
+    // Column metadata rows (one row per column category key)
+    for (const categoryKey of colCategoryKeys) {
+      const metadataRow: string[] = Array(numPrefixCells).fill('');
+      for (const col of colLabels) {
+        const value = col.category?.[categoryKey] || '';
+        // Check if value already contains the key prefix to avoid duplication
+        const formattedValue = value.startsWith(`${categoryKey}:`) ? value : `${categoryKey}:${value}`;
+        metadataRow.push(formattedValue);
+      }
+      tsvRows.push(metadataRow.join('\t'));
     }
-    // console.log(colLabelArr)
 
-    const matrixArray: any[] = data.mat
+    // Data rows: Row name + Row categories + values
+    for (let row = 0; row < numRows; row++) {
+      const rowLabel = rowLabels[row];
+      const rowData: (string | number)[] = [rowLabel.text];
 
-    matrixArray.map((ele, index) => {ele.unshift(rowLabelArr[index]); return ele; })
-    matrixArray.splice(0, 0, colLabelArr)
+      // Add each row category value
+      for (const categoryKey of rowCategoryKeys) {
+        const value = rowLabel.category?.[categoryKey] || '';
+        // Check if value already contains the key prefix to avoid duplication
+        const formattedValue = value.startsWith(`${categoryKey}:`) ? value : `${categoryKey}:${value}`;
+        rowData.push(formattedValue);
+      }
 
-    let csvRows:any[] = [];
-    for (let i = 0; i < matrixArray.length; ++i) {
-        for (let j = 0; j < matrixArray[i].length; ++j) {
-          matrixArray[i][j] = '\"' + matrixArray[i][j] + '\"';  // Handle elements that contain commas
-        }
-        csvRows.push(matrixArray[i].join(','));
+      // Add values
+      for (let col = 0; col < numColumns; col++) {
+        const value = values[row * numColumns + col];
+        rowData.push(isNaN(value) ? '' : value);
+      }
+
+      tsvRows.push(rowData.join('\t'));
     }
 
+    const tsvString = tsvRows.join('\r\n');
+    const blob = new Blob([tsvString], { type: 'text/tab-separated-values' });
+    const url = URL.createObjectURL(blob);
 
-
-    var csvString = csvRows.join('\r\n');
-    var a         = document.createElement('a');
-    a.href        = 'data:attachment/csv,' + csvString;
-    a.target      = '_blank';
-    a.download    = 'myFile.csv';
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    // Use different filename if data is cropped
+    const isCropped = croppedRowIndices !== null || croppedColIndices !== null;
+    a.download = isCropped ? 'heatmap_cropped.tsv' : 'heatmap.tsv';
 
     document.body.appendChild(a);
     a.click();
-    
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
-  const downloadPdf = () => {
-    // const deckglCanvas = cotainerRefDeckgl.current.deck.canvas;
-    containerRefDeckgl.current.deck.redraw(true)
-    const deckglCanvas = containerRefDeckgl.current.deck.canvas;
+  const downloadPdf = async () => {
+    // Use the container element which includes both DeckGL canvas and category labels
+    const containerElement = container as HTMLElement;
 
-    if (deckglCanvas) {
+    if (!containerElement) {
+      console.warn('Container element not found for snapshot');
+      return;
+    }
 
-              // Set canvas background to transparent
-              // deckglCanvas.style.backgroundColor = 'transparent';
+    try {
+      // Force DeckGL to redraw before capture
+      if (containerRefDeckgl.current?.deck) {
+        containerRefDeckgl.current.deck.redraw(true);
+      }
 
-              // Convert the canvas to a data URL with JPEG format and quality 0.9 (90%)
-              const dataUrl = deckglCanvas.toDataURL('image/png');
-              // Create a new jsPDF instance
-              const pdf = new jsPDF('p', 'mm', 'a4'); // Specify page size as A4
-
-              // Calculate the width and height of the image in the PDF
-              const pdfWidth = pdf.internal.pageSize.getWidth();
-              const pdfHeight = (deckglCanvas.height * pdfWidth) / deckglCanvas.width;
-        
-              // Specify a white background color for the image
-
-              pdf.setFillColor(255, 255, 255); // White color
-              pdf.rect(0, 0, pdfWidth, pdfHeight, 'F'); // Fill rectangle with white color
-              pdf.addImage(dataUrl, 'png', 0, 0, pdfWidth, pdfHeight);
-        
-              // Save the PDF with a specified file name
-              pdf.save('HeatmapImg.pdf');
+      // Use html2canvas to capture the entire container including HTML overlays (category labels)
+      const canvas = await html2canvas(containerElement, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Higher resolution
+        useCORS: true,
+        logging: false,
+        // Ensure WebGL canvas is captured
+        onclone: (clonedDoc) => {
+          // Copy WebGL canvas content to the cloned document
+          const originalCanvas = containerElement.querySelector('canvas');
+          const clonedCanvas = clonedDoc.querySelector('canvas');
+          if (originalCanvas && clonedCanvas) {
+            const ctx = clonedCanvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(originalCanvas, 0, 0);
             }
+          }
+        }
+      });
 
+      // Convert to data URL
+      const dataUrl = canvas.toDataURL('image/png');
+
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+      pdf.addImage(dataUrl, 'png', 0, 0, pdfWidth, pdfHeight);
+
+      pdf.save('HeatmapImg.pdf');
+    } catch (error) {
+      console.error('Error generating PDF snapshot:', error);
+      addNotification({
+        type: 'error',
+        title: 'Export Failed',
+        message: 'Failed to generate PDF snapshot. Please try again.',
+      });
+    }
   };
  
 // // REPLACE your existing crop calculation useEffect with this:
@@ -1487,14 +1683,11 @@ useLabelState(
 
 const currentViewState = viewStates[IDS.VIEWS.HEATMAP_GRID];
 const zoomValue = currentViewState?.zoom;
-const currentZoom = Array.isArray(zoomValue) ? zoomValue[0] : (zoomValue || 1);
+const currentZoom = Array.isArray(zoomValue) ? zoomValue[0] : (zoomValue || BASE_ZOOM);
 
-// 🎯 VIEWPORT DEBUG - Log current zoom and target values
-console.log('🎯 VIEWPORT DEBUG - In crop useEffect:', {
-  zoom: currentZoom,
-  target: currentViewState?.target,
-  timestamp: new Date().toISOString()
-});
+// Determine if aggregation is happening (same logic as getHeatmapGridLayerScatter.ts)
+// Aggregation starts when zoom < BASE_ZOOM (i.e., zoom < 0)
+const isAggregated = currentZoom < BASE_ZOOM;
 
 // useEffect(() => {
 //   if (!isDrawing && cropBox && heatmapStateRef.current?.cellDimensions && dataStateRef.current) {
@@ -1649,54 +1842,124 @@ console.log('🎯 VIEWPORT DEBUG - In crop useEffect:', {
 
 
 useEffect(() => {
-  if (!isDrawing && cropBox && heatmapStateRef.current?.cellDimensions && dataStateRef.current) {
+  if (!isDrawing && cropBox && heatmapStateRef.current?.cellDimensions && dataStateRef.current && dimensions) {
     try {
-      // 1) Compute screen coords relative to the heatmap grid
+      // Compute screen coords relative to the heatmap grid view
+      // cropBox coords are relative to the heatmap container (which starts after the panel)
+      // We need to subtract rowLabelsWidth to get coords relative to the heatmap grid
       const sx = Math.max(0, cropBox.startX - rowLabelsWidth);
       const ex = Math.max(0, cropBox.endX   - rowLabelsWidth);
       const sy = Math.max(0, cropBox.startY - colLabelsWidth);
       const ey = Math.max(0, cropBox.endY   - colLabelsWidth);
 
-      // 2) Grab the DeckGL viewport for your heatmap view
-      const deck = containerRefDeckgl.current;
-      if (!deck) throw new Error('DeckGL instance not ready');
-      // find the viewport matching your grid viewId, or fallback to first
-      const viewport = deck.viewports.find(v => v.id === IDS.VIEWS.HEATMAP_GRID) 
-                        || deck.viewports[0];
-
-      // 3) Unproject both corners (minX,minY) & (maxX,maxY)
-      const [wx1, wy1] = viewport.unproject([ Math.min(sx, ex), Math.min(sy, ey) ]);
-      const [wx2, wy2] = viewport.unproject([ Math.max(sx, ex), Math.max(sy, ey) ]);
-
-      // 4) Convert world coords into integer row/col indices
+      // Get cell dimensions
       const { width: cellW, height: cellH } = heatmapStateRef.current.cellDimensions;
-      const colStart = Math.floor(wx1 / cellW);
-      const colEnd   = Math.floor(wx2 / cellW);
-      const rowStart = Math.floor(wy1 / cellH);
-      const rowEnd   = Math.floor(wy2 / cellH);
 
-      console.log('********* colStart is as follows *********',colStart)
-      console.log('********* colEnd is as follows *********',colEnd)
-      console.log('********* rowStart is as follows *********',rowStart)
-      console.log('********* rowEnd is as follows *********',rowEnd)
+      // IMPORTANT: Use heatmapState dimensions for offset calculation (matches scatter layer)
+      // These are the dimensions used for centering cells in the scatter layer
+      const heatmapStateWidth = heatmapStateRef.current.width;
+      const heatmapStateHeight = heatmapStateRef.current.height;
 
-      // 5) Clamp to valid ranges
+      // Calculate actual deck.gl view dimensions (matches useViews.ts)
+      // The view is larger than heatmapState dimensions by rowLabelsWidth/colLabelsWidth
+      const availableWidth = (dimensions[0] - panelWidth) * HEATMAP_WIDTH / 100;
+      const availableHeight = dimensions[1] * HEATMAP_PARENT_HEIGHT_RATIO / 100 * HEATMAP_HEIGHT / 100;
+      const viewWidth = availableWidth - rowLabelsWidth;
+      const viewHeight = availableHeight - colLabelsWidth;
+
+      // Get current view state for zoom
+      const currentViewState = viewStates[IDS.VIEWS.HEATMAP_GRID];
+      const zoomValue = currentViewState?.zoom;
+      const zoom: number = Array.isArray(zoomValue) ? zoomValue[0] : (zoomValue || BASE_ZOOM);
+      const target = currentViewState?.target || [0, 0];
+
+      // Calculate scale factor based on zoom
+      const scale = Math.pow(2, zoom - BASE_ZOOM);
+      const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+
+      // Offset uses heatmapState dimensions (same as scatter layer centering)
+      const offsetX = heatmapStateWidth / 2 / baseScaleFactor;
+      const offsetY = heatmapStateHeight / 2 / baseScaleFactor;
+
+      // Convert screen coords to world coords
+      const minScreenX = Math.min(sx, ex);
+      const maxScreenX = Math.max(sx, ex);
+      const minScreenY = Math.min(sy, ey);
+      const maxScreenY = Math.max(sy, ey);
+
+      // The viewport center is at the center of the actual deck.gl view
+      // This is where world coordinate [0,0] appears on screen when target=[0,0]
+      const viewportCenterX = viewWidth / 2;
+      const viewportCenterY = viewHeight / 2;
+
+      // Convert screen to world coordinates using deck.gl OrthographicView formula
+      const wx1 = ((minScreenX - viewportCenterX) / scale) + target[0];
+      const wy1 = ((minScreenY - viewportCenterY) / scale) + target[1];
+      const wx2 = ((maxScreenX - viewportCenterX) / scale) + target[0];
+      const wy2 = ((maxScreenY - viewportCenterY) / scale) + target[1];
+
+      // Convert world coords to cell indices
+      // Cell position formula in scatter layer: x = col * cellW + cellW/2 - offsetX
+      // Inverse: col = (x + offsetX - cellW/2) / cellW
+      // For left edge of selection, use floor to get first cell that overlaps
+      // For right edge, use floor to get last cell that overlaps
+      const colStart = Math.floor((wx1 + offsetX) / cellW);
+      const colEnd   = Math.floor((wx2 + offsetX) / cellW);
+      const rowStart = Math.floor((wy1 + offsetY) / cellH);
+      const rowEnd   = Math.floor((wy2 + offsetY) / cellH);
+
+      // Clamp visual indices to valid ranges
       const maxCols = dataStateRef.current.numColumns - 1;
       const maxRows = dataStateRef.current.numRows    - 1;
+      const visualColStart = Math.max(0, Math.min(colStart, maxCols));
+      const visualColEnd   = Math.max(0, Math.min(colEnd,   maxCols));
+      const visualRowStart = Math.max(0, Math.min(rowStart, maxRows));
+      const visualRowEnd   = Math.max(0, Math.min(rowEnd,   maxRows));
+
+      // Get the index mappings from dataState
+      // These map: visualPosition -> originalIndex
+      const { sortedRowIndices, sortedColIndices } = dataStateRef.current;
+
+      if (!sortedRowIndices || !sortedColIndices) {
+        throw new Error('sortedRowIndices or sortedColIndices not available');
+      }
+
+      // Convert visual indices to ORIGINAL indices using the mapping
+      // This ensures we select the same data the user sees on screen
+      const originalRowIndices: number[] = [];
+      for (let v = visualRowStart; v <= visualRowEnd; v++) {
+        originalRowIndices.push(sortedRowIndices[v]);
+      }
+
+      const originalColIndices: number[] = [];
+      for (let v = visualColStart; v <= visualColEnd; v++) {
+        originalColIndices.push(sortedColIndices[v]);
+      }
+
+      // Store visual bounds for pan constraints (still needed for view management)
       const filtered = {
-        startX: Math.max(0, Math.min(colStart, maxCols)),
-        endX:   Math.max(0, Math.min(colEnd,   maxCols)),
-        startY: Math.max(0, Math.min(rowStart, maxRows)),
-        endY:   Math.max(0, Math.min(rowEnd,   maxRows))
+        startX: visualColStart,
+        endX:   visualColEnd,
+        startY: visualRowStart,
+        endY:   visualRowEnd
       };
 
-      // 6) Update state
-      setFilteredIdxDict(filtered);
-      setToastMessage(`✅ Crop applied! cols ${filtered.startX}–${filtered.endX}, rows ${filtered.startY}–${filtered.endY}`);
+      // Clear cropBox FIRST to prevent re-triggering this useEffect
+      setCropBox(null);
+
+      // Update states
+      setFilteredIdxDict(filtered);  // Visual bounds for pan constraints
+      setCroppedRowIndices(originalRowIndices);  // Original indices for worker
+      setCroppedColIndices(originalColIndices);  // Original indices for worker
+
+      // Reset view to origin so cropped data starts at top-left
+      resetViewToOrigin();
+
+      setToastMessage(`✅ Crop applied! ${originalRowIndices.length} rows × ${originalColIndices.length} cols`);
       setToastSeverity('success');
       setToastOpen(true);
 
-      // Auto‑disable cropping mode
+      // Auto-disable cropping mode
       setIsCropping(false);
     } catch (error) {
       console.error('❌ Crop error:', error);
@@ -1712,10 +1975,14 @@ useEffect(() => {
   cropBox,
   rowLabelsWidth,
   colLabelsWidth,
-  heatmapStateRef.current?.cellDimensions.height,
-  heatmapStateRef.current?.cellDimensions.width,
+  dimensions,
+  panelWidth,
+  // Note: viewStates is intentionally NOT in deps - we read it at crop time but don't want to re-run on viewState changes
+  heatmapStateRef.current?.cellDimensions?.height,
+  heatmapStateRef.current?.cellDimensions?.width,
   dataStateRef.current?.numColumns,
-  dataStateRef.current?.numRows
+  dataStateRef.current?.numRows,
+  resetViewToOrigin
 ]);
 
 // Also add this helper function for debugging crop coordinates
@@ -1728,7 +1995,7 @@ const debugCropCoordinates = (event: React.MouseEvent<HTMLDivElement>) => {
   
   const currentViewState = viewStates[IDS.VIEWS.HEATMAP_GRID];
   const zoomValue = currentViewState?.zoom;
-  const currentZoom = Array.isArray(zoomValue) ? zoomValue[0] : (zoomValue || 1);
+  const currentZoom = Array.isArray(zoomValue) ? zoomValue[0] : (zoomValue || BASE_ZOOM);
   const zoomFactor = Math.pow(2, currentZoom);
   const targetX = currentViewState?.target?.[0] || 0;
   const targetY = currentViewState?.target?.[1] || 0;
@@ -1790,12 +2057,25 @@ if(heatmapStateRef.current?.cellData && container && layers ){
           viewState={viewStates}
           layers={layers}
           getTooltip={tooltipFunction && isHovering ? tooltipFunction : null}
-          controller={!isCropping} // <-- ADD ONLY THIS LINE
+          controller={!isCropping ? {
+            scrollZoom: {
+              speed: 0.03,  // Increased from 0.01 for faster zoom
+              smooth: true  // Enable smooth zoom transitions
+            },
+            inertia: 300,  // Momentum after gestures (ms)
+            dragPan: true,
+            doubleClickZoom: true,  // Double click = zoom in
+            keyboard: true  // Shift + Double click = zoom out
+          } : false}
           onClick={(event) => {
             const obj = event.object;
-            console.log(obj)
-            if (obj?.id === "row-cluster") {
-              setClickedClusterData({ Nodes: obj.nodes, Group: obj.text });
+            console.log('DeckGL onClick:', obj);
+            if (obj?.id === "row-cluster" || obj?.id === "col-cluster") {
+              setClickedClusterData({ 
+                  Nodes: obj.nodes, 
+                  Group: obj.text,
+                  filters: filters // Include current filters
+              });
               setIsTableVisible(true);
             }
           }}
@@ -1856,7 +2136,7 @@ return heatmapStateRef.current?.cellData && container && layers ? (
         downloadMatrix={downloadMatrix}
         setCropping={enableCropping}
         setFilteredIdxDict={resetFilteredDict}
-        cropBox={cropBox}
+        cropBox={filteredIdxDict}
         isMinimapEnabled={isMinimapEnabled}
         setIsMinimapEnabled={setIsMinimapEnabled}
         filters={filters}
@@ -1877,6 +2157,28 @@ return heatmapStateRef.current?.cellData && container && layers ? (
     onMouseDown={handleMouseDown}
     >
       {deckGlInstance}
+
+      {/* Aggregation indicator badge - shown when cells are being averaged, positioned at bottom right */}
+      {isAggregated && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '-30px',
+            right: '10px',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            color: 'white',
+            padding: '8px 14px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            zIndex: 1000,
+            pointerEvents: 'none',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          }}
+        >
+          Aggregated view - Zoom in for gene-level detail
+        </div>
+      )}
 
       {/* ADD THIS OVERLAY - it sits on top of DeckGL and captures events first */}
   {isCropping && (
@@ -1992,12 +2294,6 @@ return heatmapStateRef.current?.cellData && container && layers ? (
       position: 'absolute',
       bottom: '20px',
       right: '20px',
-      width: '150px',
-      height: '150px',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)', // ✨ shadowed background
-      borderRadius: '8px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-      // padding: '6px',
       zIndex: 10,
     }}
   >
@@ -2040,6 +2336,18 @@ return heatmapStateRef.current?.cellData && container && layers ? (
       />
     )}
   </div>
+    </div>
+
+    {/* Zoom controls hint */}
+    <div style={{
+      width: '100%',
+      textAlign: 'center',
+      padding: '4px 0',
+      fontSize: '13px',
+      color: '#888',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      Scroll to zoom • Double-click to zoom in • Shift/Cmd + double-click to zoom out • Drag to pan
     </div>
 
     {/* Bottom bar with Chat and Minimap */}

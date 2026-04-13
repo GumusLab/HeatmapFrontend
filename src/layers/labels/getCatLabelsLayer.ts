@@ -144,7 +144,7 @@
 // }
 
 import { PolygonLayer } from '@deck.gl/layers/typed';
-import { CATEGORY_LAYER_HEIGHT, IDS } from '../../const';
+import { CATEGORY_LAYER_HEIGHT, IDS, BASE_ZOOM } from '../../const';
 import { OnClickType } from '../../DeckGLHeatmap.types';
 import { DataStateShape, HeatmapStateShape } from '../../types';
 
@@ -198,124 +198,95 @@ export function getCatLabelsLayer(
   const heatmapWidth = heatmapState.width;
   const heatmapHeight = heatmapState.height;
 
-  // --- Core Optimization ---
+  // Generic centering calculation based on BASE_ZOOM
+  const baseScaleFactor = Math.pow(2, BASE_ZOOM);
 
-  // 1. Get the original, stable source data array.
+  // Always use heatmap (view) dimensions for centering
+  // This keeps the coordinate system consistent with the heatmap scatter layer
+  const centeringX = heatmapWidth / 2 / baseScaleFactor;
+  const centeringY = heatmapHeight / 2 / baseScaleFactor;
+
+  // Get the source labels
   const sourceLabels = axis === 'col' ? dataState.colLabels : dataState.rowLabels;
-  const numSourceLabels = sourceLabels.length;
 
-  // 2. Create a lightweight data descriptor object for Deck.gl.
-  const dataDescriptor = {
-    length: numSourceLabels
+  // Filter and create actual data array with pre-computed positions
+  type CatCellData = {
+    originalIndex: number;
+    adjustedIndex: number;
+    contour: number[][];
+    color: [number, number, number, number];
   };
-  
-  // 3. Define helper functions for use inside the accessors.
-  const shouldRenderLabel = (index: number) => {
-    if (!filteredIdxDict) return true;
+
+  const data: CatCellData[] = [];
+
+  // Determine range based on filtering
+  const startIdx = filteredIdxDict
+    ? (axis === 'col' ? filteredIdxDict.startX : filteredIdxDict.startY)
+    : 0;
+  const endIdx = filteredIdxDict
+    ? (axis === 'col' ? filteredIdxDict.endX : filteredIdxDict.endY)
+    : sourceLabels.length - 1;
+
+  for (let i = startIdx; i <= endIdx && i < sourceLabels.length; i++) {
+    const adjustedIndex = i - startIdx;
+    const labelItem = sourceLabels[i];
+
+    let contour: number[][];
     if (axis === 'col') {
-      return index >= filteredIdxDict.startX && index <= filteredIdxDict.endX;
-    } else { // 'row'
-      return index >= filteredIdxDict.startY && index <= filteredIdxDict.endY;
+      const x1 = adjustedIndex * cellWidth - centeringX;
+      const ht = CATEGORY_LAYER_HEIGHT;
+      contour = [
+        [x1, -yOffset],
+        [x1, ht - yOffset],
+        [x1 + cellWidth, ht - yOffset],
+        [x1 + cellWidth, -yOffset],
+      ];
+    } else {
+      const y1 = adjustedIndex * cellHeight - centeringY;
+      const ht = CATEGORY_LAYER_HEIGHT;
+      const xOffset = yOffset;
+      contour = [
+        [-xOffset, y1],
+        [-xOffset, y1 + cellHeight],
+        [-xOffset + ht, y1 + cellHeight],
+        [-xOffset + ht, y1],
+      ];
     }
-  };
 
-  const getAdjustedPositionIndex = (index: number) => {
-    if (filteredIdxDict) {
-      return axis === 'col' ? index - filteredIdxDict.startX : index - filteredIdxDict.startY;
-    }
-    return index;
-  };
-  
-  return new PolygonLayer({
+    const colorString = labelItem?.categoryColor?.[cat];
+    const color = hexToRgb(colorString);
+
+    data.push({
+      originalIndex: i,
+      adjustedIndex,
+      contour,
+      color,
+    });
+  }
+
+  return new PolygonLayer<CatCellData>({
     id: `${axis}_${cat}:cat`,
-    viewId: axis === "col" ? IDS.VIEWS.COL_LABELS : IDS.VIEWS.ROW_LABELS,
-    data: dataDescriptor,
+    data,
 
-    // --- Optimized Accessors ---
-    
-    getPolygon: (_: any, { index }: { index: number }) => {
-      if (!shouldRenderLabel(index)) {
-        return null; // Return null for filtered-out items so they aren't rendered.
-      }
-      
-      const adjustedIndex = getAdjustedPositionIndex(index);
+    getPolygon: (d) => d.contour,
+    getFillColor: (d) => d.color,
 
-      if (axis === 'col') {
-        const offsetX = heatmapWidth / 4;
-        const x1 = adjustedIndex * cellWidth - offsetX;
-        const ht = CATEGORY_LAYER_HEIGHT;
-        return [
-          [x1, -yOffset],
-          [x1, ht - yOffset],
-          [x1 + cellWidth, ht - yOffset],
-          [x1 + cellWidth, -yOffset],
-        ];
-      } else { // axis === 'row'
-        const offsetY = heatmapHeight / 4;
-        const y1 = adjustedIndex * cellHeight - offsetY;
-        const ht = CATEGORY_LAYER_HEIGHT;
-        const xOffset = yOffset; // The 'yOffset' prop is used as xOffset for rows
-        return [
-          [-xOffset, y1],
-          [-xOffset, y1 + cellHeight],
-          [-xOffset + ht, y1 + cellHeight],
-          [-xOffset + ht, y1],
-        ];
-      }
+    onHover: (info: any) => {
+      if (!info.object) return;
+      const d = info.object as CatCellData;
+      const labelItem = sourceLabels[d.originalIndex];
+      if (!labelItem) return;
+
+      const categoryValue = labelItem.category?.[cat];
+      info.object = {
+        categoryName: cat,
+        text: categoryValue?.split(":")[1] || '',
+        axis: axis,
+        labelText: labelItem.text,
+        type: 'category'
+      };
     },
 
-    getFillColor: (_: any, { index }: { index: number }) => {
-      const labelItem = sourceLabels[index];
-      if (!labelItem || !shouldRenderLabel(index)) {
-        return [0, 0, 0, 0]; // Transparent if hidden
-      }
-      const colorString = labelItem.categoryColor?.[cat];
-      return hexToRgb(colorString);
-    },
-  //   onHover: (info, _) => {
-  //     const { index } = info;
-  //     if (index === -1) return;
-
-  //     const cellIndex = dataObject.indices[index];
-  //     const rowIndex = cellData.rowIndices[cellIndex];
-  //     const colIndex = cellData.colIndices[cellIndex];
-      
-  //     // For detailed cells, provide specific row/col info
-  //     info.object = {
-  //         row: rowLabels[rowIndex],
-  //         col: colLabels[colIndex],
-  //         value: cellData.values[cellIndex],
-  //         aggregated: false,
-  //     };
-  // },
-  onHover: (info: any) => {
-    const { index } = info;
-    if (index === -1 || !shouldRenderLabel(index))
-  {
-      return;
-    }
-
-    const labelItem = sourceLabels[index];
-    if (!labelItem) {
-      return;
-    }
-
-    // Get the category value for this label
-    const categoryValue =
-  labelItem.category?.[cat];
-
-    // Create hover object with category 
-    info.object = {
-      categoryName: cat,
-      text: categoryValue.split(":")[1],
-      axis: axis,
-      labelText: labelItem.text,
-      type: 'category'
-    };
-  },
-  
-
-    // --- Static & Other Properties ---
     pickable: true,
     filled: true,
     wireframe: debug,
@@ -324,10 +295,8 @@ export function getCatLabelsLayer(
     onClick,
     autoHighlight: true,
 
-    // --- Critical Update Triggers ---
     updateTriggers: {
-      getPolygon: [cellWidth, cellHeight, heatmapWidth, heatmapHeight, yOffset, filteredIdxDict],
-      getFillColor: [sourceLabels, cat, filteredIdxDict],
+      data: [filteredIdxDict, sourceLabels, cellWidth, cellHeight, centeringX, centeringY, yOffset, cat],
     },
   });
 }

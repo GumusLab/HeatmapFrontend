@@ -286,7 +286,10 @@ function ClusterInfoBox({
   const [isPathwayLoading, setPathwayLoading] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
 
-  const handleClose = () => setVisibilty(false);
+  const handleClose = () => {
+    setVisibilty(false);
+    setHovering(true); // Re-enable hover tooltips when closing
+  };
   const handleMouseEnter = () => setHovering(false);
   const handleMouseLeave = () => setHovering(true);
 
@@ -303,7 +306,11 @@ function ClusterInfoBox({
 
   const handleVisualizeNetwork = () => {
     setNetworkLoading(true);
-    if (onShowNetwork) onShowNetwork({ geneIds: data.Nodes,metadata:{clusterId:data.Group} });
+    if (onShowNetwork) onShowNetwork({ 
+      geneIds: data.Nodes,
+      metadata: {clusterId: data.Group},
+      filters: data.filters || {} // Pass current filters from cluster data
+    });
     setTimeout(() => setNetworkLoading(false), 500);
   };
   

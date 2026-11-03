@@ -334,6 +334,9 @@ export const DeckGLHeatmap = ({
     actions: WorkflowAction[];
     preImportSnapshot: AnalysisSnapshot;
     baselineDataStateVersion: number;
+    preImportWorkflowHistory: WorkflowHistoryState;
+    preImportUndoStack: AnalysisSnapshot[];
+    preImportRedoStack: AnalysisSnapshot[];
     phase:
     | 'waiting_for_baseline'
     | 'running_action'
@@ -709,6 +712,20 @@ export const DeckGLHeatmap = ({
       replay.preImportSnapshot
     );
 
+    setWorkflowHistory(
+      replay.preImportWorkflowHistory
+    );
+
+    undoStackRef.current = [
+      ...replay.preImportUndoStack
+    ];
+
+    redoStackRef.current = [
+      ...replay.preImportRedoStack
+    ];
+
+    setHistoryVersion(prev => prev + 1);
+
     setToastMessage(
       'Imported workflow failed. Your previous analysis was restored.'
     );
@@ -726,6 +743,15 @@ export const DeckGLHeatmap = ({
     const existingReplay =
       pendingImportedWorkflowReplayRef.current;
 
+    setWorkflowHistory(
+      createEmptyWorkflowHistory()
+    );
+
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+
+    setHistoryVersion(prev => prev + 1);
+
     if (
       existingReplay?.phase === 'waiting_for_baseline' ||
       existingReplay?.phase === 'running_action' ||
@@ -741,8 +767,25 @@ export const DeckGLHeatmap = ({
 
     pendingImportedWorkflowReplayRef.current = {
       actions: [...actions],
+
       preImportSnapshot: createAnalysisSnapshot(),
-      baselineDataStateVersion: datastateVersion + 1,
+
+      preImportWorkflowHistory: {
+        actions: [...workflowHistory.actions],
+        cursor: workflowHistory.cursor
+      },
+
+      preImportUndoStack: [
+        ...undoStackRef.current
+      ],
+
+      preImportRedoStack: [
+        ...redoStackRef.current
+      ],
+
+      baselineDataStateVersion:
+        datastateVersion + 1,
+
       phase: 'waiting_for_baseline',
       index: 0
     };
@@ -753,6 +796,64 @@ export const DeckGLHeatmap = ({
     );
 
     resetAnalysisForImportedWorkflow();
+  };
+
+  const completeImportedWorkflowAction = (
+    action: WorkflowAction
+  ) => {
+    const replay =
+      pendingImportedWorkflowReplayRef.current;
+
+    if (
+      !replay ||
+      replay.phase !== 'running_action'
+    ) {
+      return;
+    }
+
+    const importedAction: WorkflowAction = {
+      ...action,
+      source: 'imported'
+    };
+
+    setWorkflowHistory(prev =>
+      appendWorkflowAction(
+        prev,
+        importedAction
+      )
+    );
+
+    replay.index += 1;
+    replay.phase = 'ready_for_next_action';
+
+    console.log(
+      '✅ IMPORTED ACTION COMPLETED',
+      importedAction
+    );
+
+    console.log(
+      '⏭️ NEXT IMPORTED ACTION INDEX',
+      replay.index
+    );
+  };
+
+  const saveImportedWorkflowUndoPoint = (
+    workflowCursor: number
+  ) => {
+    const snapshot: AnalysisSnapshot = {
+      ...createAnalysisSnapshot(),
+      workflowCursor
+    };
+
+    undoStackRef.current.push(snapshot);
+
+    if (undoStackRef.current.length > MAX_HISTORY) {
+      undoStackRef.current.shift();
+    }
+
+    redoStackRef.current = [];
+
+    setHistoryVersion(prev => prev + 1);
   };
 
   const executeImportedWorkflowAction = (
@@ -776,28 +877,7 @@ export const DeckGLHeatmap = ({
           reZscoreFilteredSubset
         },
         () => {
-          const replay =
-            pendingImportedWorkflowReplayRef.current;
-
-          if (
-            !replay ||
-            replay.phase !== 'running_action'
-          ) {
-            return;
-          }
-
-          replay.index += 1;
-          replay.phase = 'ready_for_next_action';
-
-          console.log(
-            '✅ IMPORTED ACTION COMPLETED',
-            action
-          );
-
-          console.log(
-            '⏭️ NEXT IMPORTED ACTION INDEX',
-            replay.index
-          );
+          completeImportedWorkflowAction(action);
         }
       );
 
@@ -825,28 +905,7 @@ export const DeckGLHeatmap = ({
           reZscoreFilteredSubset: enabled
         },
         () => {
-          const replay =
-            pendingImportedWorkflowReplayRef.current;
-
-          if (
-            !replay ||
-            replay.phase !== 'running_action'
-          ) {
-            return;
-          }
-
-          replay.index += 1;
-          replay.phase = 'ready_for_next_action';
-
-          console.log(
-            '✅ IMPORTED ACTION COMPLETED',
-            action
-          );
-
-          console.log(
-            '⏭️ NEXT IMPORTED ACTION INDEX',
-            replay.index
-          );
+          completeImportedWorkflowAction(action);
         }
       );
 
@@ -1972,6 +2031,10 @@ export const DeckGLHeatmap = ({
         return;
       }
 
+      saveImportedWorkflowUndoPoint(
+        replay.index
+      );
+
       replay.phase = 'running_action';
 
       const started =
@@ -1999,22 +2062,6 @@ export const DeckGLHeatmap = ({
       replay.phase = 'completed';
       setIsImportedWorkflowRunning(false);
 
-      undoStackRef.current = [];
-      redoStackRef.current = [];
-      setHistoryVersion(prev => prev + 1);
-
-      const importedActions = replay.actions.map(
-        action => ({
-          ...action,
-          source: 'imported' as const
-        })
-      );
-
-      setWorkflowHistory({
-        actions: importedActions,
-        cursor: importedActions.length
-      });
-
       console.log(
         '🏁 IMPORTED WORKFLOW COMPLETED',
         {
@@ -2038,6 +2085,10 @@ export const DeckGLHeatmap = ({
       if (!nextAction) {
         return;
       }
+
+      saveImportedWorkflowUndoPoint(
+        replay.index
+      );
 
       replay.phase = 'running_action';
 
@@ -2260,10 +2311,36 @@ export const DeckGLHeatmap = ({
   const previousOrder = usePrevious(order);
   tooltipFunction = generateTooltipContent
 
+  const hasRowMetadata =
+    Object.keys(data?.cat_colors?.row ?? {}).length > 0;
+
+  const hasColMetadata =
+    Object.keys(data?.cat_colors?.col ?? {}).length > 0;
+
+  let sourceFeatureAxis: 'row' | 'col' | null = null;
+
+  if (hasColMetadata && !hasRowMetadata) {
+    sourceFeatureAxis = 'row';
+  } else if (hasRowMetadata && !hasColMetadata) {
+    sourceFeatureAxis = 'col';
+  } else if (!hasRowMetadata && !hasColMetadata) {
+    // Preserve existing behavior for matrices without metadata.
+    sourceFeatureAxis = 'row';
+  }
+
+  const visualFeatureAxis =
+    sourceFeatureAxis === null
+      ? null
+      : matrixOrientation === 'Transposed'
+        ? sourceFeatureAxis === 'row'
+          ? 'col'
+          : 'row'
+        : sourceFeatureAxis;
+
   const clickableClusterId =
-    matrixOrientation === 'Transposed'
-      ? 'col-cluster'
-      : 'row-cluster';
+    visualFeatureAxis === null
+      ? null
+      : `${visualFeatureAxis}-cluster`;
 
 
   const stableOnClick = useMemo(() => ({
@@ -3907,18 +3984,8 @@ export const DeckGLHeatmap = ({
             currentImportedAction?.type === 'crop' ||
             currentImportedAction?.type === 'clear_crop'
           ) {
-            importedReplay.index += 1;
-            importedReplay.phase =
-              'ready_for_next_action';
-
-            console.log(
-              '✅ IMPORTED ACTION COMPLETED',
+            completeImportedWorkflowAction(
               currentImportedAction
-            );
-
-            console.log(
-              '⏭️ NEXT IMPORTED ACTION INDEX',
-              importedReplay.index
             );
           }
         }
@@ -4233,7 +4300,7 @@ export const DeckGLHeatmap = ({
     heatmapStateRef.current,
     labels,
     container,
-    order,
+    visualOrder,
     ID,
     datastateVersion,
     heatmapstateVersion,
@@ -4407,23 +4474,11 @@ export const DeckGLHeatmap = ({
           ((i + 1) * (catH + gap)) +
           catH;
         label.style.left = `${xPos}px`;
-        if (matrixOrientation === 'Transposed') {
-          // Metadata originally belonged to columns and is now displayed vertically.
-          // Put its titles above the heatmap.
-          label.style.top = `${colLabelsWidth - 18}px`;
-          label.style.transform = 'rotate(-90deg)';
-          label.style.transformOrigin = 'bottom left';
-        } else {
-          // Preserve existing row-metadata behavior.
-          const yPos =
-            (heatmapStateRef.current?.height || 0) +
-            colLabelsWidth +
-            5;
-
-          label.style.top = `${yPos}px`;
-          label.style.transform = 'rotate(90deg)';
-          label.style.transformOrigin = 'top left';
-        }
+        // Row metadata is displayed vertically regardless of
+        // the matrix's original/transposed orientation.
+        label.style.top = `${colLabelsWidth - 18}px`;
+        label.style.transform = 'rotate(-90deg)';
+        label.style.transformOrigin = 'bottom left';
 
         containerElement.appendChild(label);
       });
@@ -4550,8 +4605,15 @@ export const DeckGLHeatmap = ({
       searchTerm,
       order: visualOrder,
       categories: categories, // Assuming `categories` is stable or correctly memoized
-      rowSliderVal: rowClustGroup,
-      colSliderVal: colClustGroup,
+      rowSliderVal:
+        matrixOrientation === 'Transposed'
+          ? colClustGroup
+          : rowClustGroup,
+
+      colSliderVal:
+        matrixOrientation === 'Transposed'
+          ? rowClustGroup
+          : colClustGroup,
       opacityVal: OpacityValue,
       pvalThreshold: 0.05, // Example pvalThreshold
       pvalData,
@@ -4576,6 +4638,7 @@ export const DeckGLHeatmap = ({
     rowLabelsWidth,
     searchTerm,
     visualOrder,
+    matrixOrientation,
     rowClustGroup,
     colClustGroup,
     OpacityValue,

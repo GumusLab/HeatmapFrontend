@@ -123,6 +123,44 @@ function applyCategorySorting(
       console.error('❌ Row not found in data:', order.sortColsByRowName);
     }
   }
+
+  // Sort rows by a specific column's values
+  if (
+    order.sortRowsByColName !== null &&
+    order.sortRowsByColName !== undefined &&
+    order.sortRowsByColName.trim().length > 0
+  ) {
+    console.log(
+      '🔍 Sorting rows by column name:',
+      order.sortRowsByColName
+    );
+
+    const colIndex = jsonData.col_nodes.findIndex(
+      (node: any) => node.name === order.sortRowsByColName
+    );
+
+    console.log(
+      '📊 Found column index:',
+      colIndex,
+      'for column name:',
+      order.sortRowsByColName
+    );
+
+    if (colIndex !== -1) {
+      rowIndices.sort((a, b) => {
+        const valueA = jsonData.mat[a]?.[colIndex] ?? 0;
+        const valueB = jsonData.mat[b]?.[colIndex] ?? 0;
+        return valueB - valueA;
+      });
+
+      console.log('✅ Row sorting complete');
+    } else {
+      console.error(
+        '❌ Column not found in data:',
+        order.sortRowsByColName
+      );
+    }
+  }
 }
 
 
@@ -343,6 +381,7 @@ export function computeDataState(
     colCat: string[];
     sortByColCat: string;
     sortColsByRowName: string | null;
+    sortRowsByColName: string | null;
   },
   categories: { row: { [key: string]: string }; col: { [key: string]: string } },
   croppedRowIndices?: number[] | null,
@@ -397,10 +436,19 @@ export function computeDataState(
   const numColumns = colIndices.length;
 
   // Apply sorting to indices instead of creating nested objects
-  const needsCategorySorting = order.sortByRowCat.trim().length > 0 ||
+  const needsCategorySorting =
+    order.sortByRowCat.trim().length > 0 ||
     order.sortByColCat.trim().length > 0 ||
-    (order.sortColsByRowName !== null && order.sortColsByRowName !== undefined && order.sortColsByRowName.trim().length > 0);
-
+    (
+      order.sortColsByRowName !== null &&
+      order.sortColsByRowName !== undefined &&
+      order.sortColsByRowName.trim().length > 0
+    ) ||
+    (
+      order.sortRowsByColName !== null &&
+      order.sortRowsByColName !== undefined &&
+      order.sortRowsByColName.trim().length > 0
+    );
   // Preserve the current independent row/column ordering first.
   applyRegularSorting(
     rowIndices,

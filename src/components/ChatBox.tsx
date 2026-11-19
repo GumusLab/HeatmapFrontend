@@ -140,12 +140,40 @@ const ChatBox: React.FC<ChatInputProps> = ({
   const isTransposed =
     matrixOrientation === 'Transposed';
 
-  const sampleMetadataDisplayAxis =
-    isTransposed
-      ? 'rows'
-      : 'columns';
+  const hasColMetadataValues =
+    Object.keys(colMetadataValues).length > 0;
 
-  const dynamicFilterSuggestions = Object.entries(colMetadataValues)
+  const hasRowMetadataValues =
+    Object.keys(rowMetadataValues).length > 0;
+
+  const sampleMetadataSourceAxis: 'row' | 'col' | null =
+    hasColMetadataValues && !hasRowMetadataValues
+      ? 'col'
+      : hasRowMetadataValues && !hasColMetadataValues
+        ? 'row'
+        : !hasColMetadataValues && !hasRowMetadataValues
+          ? 'col'
+          : null;
+
+  const sampleMetadataValues =
+    sampleMetadataSourceAxis === 'row'
+      ? rowMetadataValues
+      : sampleMetadataSourceAxis === 'col'
+        ? colMetadataValues
+        : {};
+
+  const sampleMetadataDisplayAxis =
+    sampleMetadataSourceAxis === null
+      ? null
+      : isTransposed
+        ? sampleMetadataSourceAxis === 'row'
+          ? 'columns'
+          : 'rows'
+        : sampleMetadataSourceAxis === 'row'
+          ? 'rows'
+          : 'columns';
+
+  const dynamicFilterSuggestions = Object.entries(sampleMetadataValues)
     // Avoid PatientID-like fields with dozens/hundreds of values
     .filter(([_, values]) => values.length >= 2 && values.length <= 6)
     .flatMap(([metadata, values]) =>
@@ -154,12 +182,14 @@ const ChatBox: React.FC<ChatInputProps> = ({
     .slice(0, 6);
 
   const dynamicSortSuggestions =
-    Object.keys(colMetadataValues)
-      .slice(0, 3)
-      .map(
-        metadata =>
-          `Sort ${sampleMetadataDisplayAxis} by ${metadata}`
-      );
+    sampleMetadataDisplayAxis === null
+      ? []
+      : Object.keys(sampleMetadataValues)
+        .slice(0, 3)
+        .map(
+          metadata =>
+            `Sort ${sampleMetadataDisplayAxis} by ${metadata}`
+        );
 
   // Suggestions based on meta-data and valid backend actions
   const suggestions = {

@@ -21,7 +21,7 @@ const X = 0;
 const Y = 1;
 
 // Custom easing function for smooth animation
-const easeInOutCubic = (t: number): number => 
+const easeInOutCubic = (t: number): number =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 interface CropBox {
@@ -39,21 +39,22 @@ export const useViewStates = (
   panelWidth: number,
   searchTerm?: string,
   colLabelsWidth?: number,
-  filteredIdxDict?: CropBox | null
+  filteredIdxDict?: CropBox | null,
+  featureAxis?: 'row' | 'col' | null
 ) => {
-  const [visibleBounds, setVisibleBounds] = useState<{startRow: number, endRow: number, startCol: number, endCol: number} | null>(null);
+  const [visibleBounds, setVisibleBounds] = useState<{ startRow: number, endRow: number, startCol: number, endCol: number } | null>(null);
   const [isSearchZooming, setIsSearchZooming] = useState(false);
   const [isZoomedOut, setIsZoomedOut] = useState(false);
 
   const animationRef = useRef<number | null>(null);
-  const viewStateRef = useRef<any|null>(null);
+  const viewStateRef = useRef<any | null>(null);
   const boundsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingBoundsRef = useRef<{startRow: number, endRow: number, startCol: number, endCol: number} | null>(null);
+  const pendingBoundsRef = useRef<{ startRow: number, endRow: number, startCol: number, endCol: number } | null>(null);
 
   // Debounced visible bounds update — avoids layer recreation on every zoom frame.
   // Only triggers a React state update (and thus layer recreation) when bounds actually change
   // meaningfully, or after zoom/pan settles.
-  const debouncedSetVisibleBounds = useCallback((bounds: {startRow: number, endRow: number, startCol: number, endCol: number}) => {
+  const debouncedSetVisibleBounds = useCallback((bounds: { startRow: number, endRow: number, startCol: number, endCol: number }) => {
     pendingBoundsRef.current = bounds;
     if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
     boundsTimerRef.current = setTimeout(() => {
@@ -62,7 +63,7 @@ export const useViewStates = (
         if (!next) return prev;
         // Only update if bounds actually changed
         if (prev && prev.startRow === next.startRow && prev.endRow === next.endRow &&
-            prev.startCol === next.startCol && prev.endCol === next.endCol) {
+          prev.startCol === next.startCol && prev.endCol === next.endCol) {
           return prev;
         }
         return next;
@@ -83,16 +84,16 @@ export const useViewStates = (
         width: 0,
         height: 0,
       };
-      
+
       // If dimensions are null, return the default state
       if (!dimensions) return defaultState;
-      
+
       // Calculate actual heatmap dimensions
       const availableWidth = dimensions[0] - panelWidth;
       const heatmapWidth = availableWidth * HEATMAP_WIDTH / 100;
       // Account for HEATMAP_PARENT_HEIGHT_RATIO (parent container is only 90% of full height)
       const heatmapHeight = dimensions[1] * HEATMAP_PARENT_HEIGHT_RATIO / 100 * HEATMAP_HEIGHT / 100;
-      
+
       return {
         target: [0, 0],
         zoom: BASE_ZOOM,
@@ -114,13 +115,13 @@ export const useViewStates = (
   useEffect(() => {
     viewStateRef.current = viewStates;
   }, [viewStates]);
-  
+
 
   // Custom animation function that doesn't rely on FlyToInterpolator
   const animateViewState = useCallback((
-    targetX: number, 
-    targetY: number, 
-    targetZoom: number, 
+    targetX: number,
+    targetY: number,
+    targetZoom: number,
     duration: number = 50
   ) => {
     // Cancel any ongoing animation
@@ -140,17 +141,17 @@ export const useViewStates = (
       target: [...currentState[IDS.VIEWS.HEATMAP_GRID].target],
       zoom: currentState[IDS.VIEWS.HEATMAP_GRID].zoom as number
     };
-  
+
 
     // Ensure startState.target is properly typed
     const startX = Array.isArray(startState.target) ? startState.target[0] : 0;
     const startY = Array.isArray(startState.target) ? startState.target[1] : 0;
-    
+
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const t = Math.min(1, elapsed / duration);
       const easedT = easeInOutCubic(t);
-      
+
       // Interpolate between start and end values
       const zoom = startState.zoom + (targetZoom - startState.zoom) * easedT;
       const newTargetX = startX + (targetX - startX) * easedT;
@@ -173,7 +174,7 @@ export const useViewStates = (
           target: [newTargetX, newTargetY],
         },
       }));
-      
+
       if (t < 1) {
         animationRef.current = requestAnimationFrame(animate);
       } else {
@@ -181,7 +182,7 @@ export const useViewStates = (
         animationRef.current = null;
       }
     };
-    
+
     setIsSearchZooming(true);
     animationRef.current = requestAnimationFrame(animate);
     // if (animationRef.current !== null) {
@@ -225,478 +226,501 @@ export const useViewStates = (
   }, [container, initialViewState, viewStates]);
 
   // Effect to handle search term changes
-useEffect(() => {
-  if (
-    searchTerm && 
-    dataState && 
-    heatmapState && 
-    dimensions
-  ) {
-    
-    // Get the row labels from dataState
-    const rowLabels = dataState.rowLabels || [];
-    
-    // Find indices of matching row labels (case insensitive search)
-    const matchingIndices = rowLabels
-      .map((label, index) => (
-        label.text.toLowerCase().includes(searchTerm.toLowerCase()) ? index : -1
-      ))
-      .filter(index => index !== -1);
+  useEffect(() => {
+    if (
+      searchTerm &&
+      dataState &&
+      heatmapState &&
+      dimensions
+    ) {
 
-    
-    if (matchingIndices.length > 0) {
-      
-      // Calculate the bounds of the matching cells
-      const cellDimensions = heatmapState.cellDimensions;
-      const firstMatchIdx = Math.min(...matchingIndices);
-      const lastMatchIdx = Math.max(...matchingIndices);
+      // Search the biological feature axis rather than assuming features are rows.
+      const searchAxis = featureAxis ?? 'row';
+      const featureLabels =
+        searchAxis === 'col'
+          ? dataState.colLabels || []
+          : dataState.rowLabels || [];
 
-      // Use colLabelsWidth as the offset for the Y coordinate
-      const colLabelsHeight = colLabelsWidth || 0;
-      
-      // Get heatmap dimensions for offset calculation
-      const heatmapWidth = heatmapState.width;
-      const heatmapHeight = heatmapState.height;
-
-      // Calculate the offset used in the viewport coordinates (generalistic based on BASE_ZOOM)
-      const baseScaleFactor = Math.pow(2, BASE_ZOOM);
-      const offsetX = heatmapWidth / 2 / baseScaleFactor;
-      const offsetY = heatmapHeight / 2 / baseScaleFactor;
-      
-      // Calculate centerY based on cell positions in the grid
-      // Remove the factor of 2 and properly account for the viewport offset
-      const centerY = 
-                      (firstMatchIdx + 1) * 
-                      cellDimensions.height - 
-                      offsetY;
-                      // -colLabelsHeight/4 + 
-      // Calculate appropriate zoom level
-    
-      
+      const matchingIndices = featureLabels
+        .map((label, index) => (
+          label.text.toLowerCase().includes(searchTerm.toLowerCase()) ? index : -1
+        ))
+        .filter(index => index !== -1);
 
 
-            // Calculate appropriate zoom level
-      const matchSpan = (lastMatchIdx - firstMatchIdx + 1) * cellDimensions.height;
-      const viewportHeight = dimensions[1] - colLabelsHeight;
+      if (matchingIndices.length > 0) {
 
-      // Calculate zoom to fit all matches with padding
-      const padding = 3.0; // Increase padding for less extreme zoom
-      let targetZoom = Math.log2(viewportHeight / (matchSpan * padding));
+        // Calculate the bounds of the matching cells
+        const cellDimensions = heatmapState.cellDimensions;
+        const firstMatchIdx = Math.min(...matchingIndices);
+        const lastMatchIdx = Math.max(...matchingIndices);
 
-      // Apply a dampening factor to reduce zoom intensity
-      const zoomDampeningFactor = 0.7;
-      targetZoom = targetZoom * zoomDampeningFactor;
+        // Use colLabelsWidth as the offset for the Y coordinate
+        const colLabelsHeight = colLabelsWidth || 0;
 
-      // Set a reasonable maximum zoom
-      const reasonableMaxZoom = Math.min(MAX_ZOOM, BASE_ZOOM + 4); // Limit how far we can zoom in
+        // Get heatmap dimensions for offset calculation
+        const heatmapWidth = heatmapState.width;
+        const heatmapHeight = heatmapState.height;
 
-      // Ensure zoom is within bounds
-      targetZoom = Math.min(Math.max(targetZoom, viewStates[IDS.VIEWS.HEATMAP_GRID].minZoom), reasonableMaxZoom);
-            
-      // Get current X position (maintain horizontal position)
-      const currentX = Array.isArray(viewStates[IDS.VIEWS.HEATMAP_GRID].target) 
-        ? viewStates[IDS.VIEWS.HEATMAP_GRID].target[X] 
-        : 0;
-      
-      // Use custom animation function
-      animateViewState(currentX, centerY, targetZoom);
-      
-    } else {
-      console.log(`No matches found for search term: ${searchTerm}`);
+        // Calculate the offset used in the viewport coordinates (generalistic based on BASE_ZOOM)
+        const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+        const offsetX = heatmapWidth / 2 / baseScaleFactor;
+        const offsetY = heatmapHeight / 2 / baseScaleFactor;
+
+        const isColumnFeatureSearch = featureAxis === 'col';
+
+        const matchSpan = isColumnFeatureSearch
+          ? (lastMatchIdx - firstMatchIdx + 1) * cellDimensions.width
+          : (lastMatchIdx - firstMatchIdx + 1) * cellDimensions.height;
+
+        const viewportSize = isColumnFeatureSearch
+          ? dimensions[0] - panelWidth
+          : dimensions[1] - colLabelsHeight;
+
+        const padding = 3.0;
+        let targetZoom = Math.log2(
+          viewportSize / (matchSpan * padding)
+        );
+
+        const zoomDampeningFactor = 0.7;
+        targetZoom *= zoomDampeningFactor;
+
+        const reasonableMaxZoom = Math.min(
+          MAX_ZOOM,
+          BASE_ZOOM + 4
+        );
+
+        targetZoom = Math.min(
+          Math.max(
+            targetZoom,
+            viewStates[IDS.VIEWS.HEATMAP_GRID].minZoom
+          ),
+          reasonableMaxZoom
+        );
+
+        const currentTarget =
+          viewStates[IDS.VIEWS.HEATMAP_GRID].target;
+
+        const currentX = Array.isArray(currentTarget)
+          ? currentTarget[X]
+          : 0;
+
+        const currentY = Array.isArray(currentTarget)
+          ? currentTarget[Y]
+          : 0;
+
+        if (isColumnFeatureSearch) {
+          const centerX =
+            (firstMatchIdx + 1) *
+            cellDimensions.width -
+            offsetX;
+
+          animateViewState(
+            centerX,
+            currentY,
+            targetZoom
+          );
+        } else {
+          const centerY =
+            (firstMatchIdx + 1) *
+            cellDimensions.height -
+            offsetY;
+
+          animateViewState(
+            currentX,
+            centerY,
+            targetZoom
+          );
+        }
+
+      } else {
+        console.log(`No matches found for search term: ${searchTerm}`);
+      }
     }
-  }
-}, [searchTerm, colLabelsWidth, animateViewState, dataState, dimensions, heatmapState]);
+  }, [
+    searchTerm,
+    colLabelsWidth,
+    animateViewState,
+    dataState,
+    dimensions,
+    heatmapState,
+    featureAxis,
+    panelWidth
+  ]);
 
 
   useEffect(() => {
     if (heatmapState && dataState && dimensions) {
-        // --- Calculate offsets generically based on BASE_ZOOM ---
-        const { width: cellWidth, height: cellHeight } = heatmapState.cellDimensions;
-        const { numColumns, numRows } = dataState;
-        const baseScaleFactor = Math.pow(2, BASE_ZOOM);
-        const offsetX = heatmapState.width / 2 / baseScaleFactor;
-        const offsetY = heatmapState.height / 2 / baseScaleFactor;
-        const visibleArea = {
-            minX: -offsetX,
-            minY: -offsetY,
-            maxX: offsetX,
-            maxY: offsetY
-        };
-
-        // 1. Calculate the visible range of row and column INDICES from the visibleArea coordinates.
-        // We use Math.floor for the start and Math.ceil for the end to ensure we cover partial cells.
-        const startCol = Math.max(0, Math.floor((visibleArea.minX + offsetX) / cellWidth));
-        const endCol = Math.min(numColumns - 1, Math.ceil((visibleArea.maxX + offsetX) / cellWidth));
-
-        const startRow = Math.max(0, Math.floor((visibleArea.minY + offsetY) / cellHeight));
-        const endRow = Math.min(numRows - 1, Math.ceil((visibleArea.maxY + offsetY) / cellHeight));
-
-        // Set visibleBounds - this is what the scatter layer uses for viewport culling
-        setVisibleBounds({ startRow, endRow, startCol, endCol });
-    }
-}, [
-  heatmapState?.cellDimensions?.width,
-  heatmapState?.cellDimensions?.height,
-  dataState?.numRows,      // Re-run when data size changes (e.g., after reset)
-  dataState?.numColumns,   // Re-run when data size changes (e.g., after reset)
-  heatmapState?.width,     // Re-run when heatmap dimensions change
-  heatmapState?.height
-]);
-
-
-
-
-
-
-
-
-
-const onViewStateChange = useCallback(
-  (params: ViewStateChangeProps) => {
-    const { viewId, viewState } = params;
-
-    // 1) Skip if search‑animation is controlling the camera
-    if (isSearchZooming) {
-      return;
-    }
-
-    // 2) Grab the previous heatmap viewState from the ref
-    const prevVS = viewStateRef.current[IDS.VIEWS.HEATMAP_GRID];
-
-    // 3) If we’re in the HEATMAP_GRID and zoom actually changed, snap target back
-    if (
-      viewId === IDS.VIEWS.HEATMAP_GRID &&
-      viewState.zoom !== prevVS.zoom
-    ) {
-      viewState.target = [...prevVS.target];
-    }
-
-    // 4) Your existing constraints: keep target within data bounds
-    if (heatmapState && dataState && dimensions) {
-      const cellW = heatmapState.cellDimensions.width;
-      const cellH = heatmapState.cellDimensions.height;
-
-      // When cropping, use cropped dimensions for constraints
-      const numCols = filteredIdxDict
-        ? (filteredIdxDict.endX - filteredIdxDict.startX + 1)
-        : dataState.numColumns;
-      const numRows = filteredIdxDict
-        ? (filteredIdxDict.endY - filteredIdxDict.startY + 1)
-        : dataState.numRows;
-
-      const dataW = numCols * cellW;
-      const dataH = numRows * cellH;
-
-      // Calculate how big the viewport is in world‐space
-      const scale = 2 ** (viewState.zoom - BASE_ZOOM);
-      const viewW = heatmapState.width  / scale;
-      const viewH = heatmapState.height / scale;
-
-      // Generic calculation based on BASE_ZOOM
-      const baseScaleFactor = Math.pow(2, BASE_ZOOM);
-      const halfW = viewW / 2 / baseScaleFactor;
-      const halfH = viewH / 2 / baseScaleFactor;
-
-      const offsetX = heatmapState.width  / 2 / baseScaleFactor;
-      const offsetY = heatmapState.height / 2 / baseScaleFactor;
-
-      const minX = -offsetX + halfW;
-      const minY = -offsetY + halfH;
-      const maxX =  dataW    - offsetX - halfW;
-      const maxY =  dataH    - offsetY - halfH;
-
-      // Calculate what world coordinates are visible at current target
-      const visibleLeft = viewState.target[0] - halfW;
-      const visibleRight = viewState.target[0] + halfW;
-      const visibleTop = viewState.target[1] - halfH;
-      const visibleBottom = viewState.target[1] + halfH;
-
-      // Data bounds in world coordinates
-      const dataLeft = -offsetX;
-      const dataRight = dataW - offsetX;
-      const dataTop = -offsetY;
-      const dataBottom = dataH - offsetY;
-
-      // Last column position (using cropped numCols)
-      const lastColCenter = (numCols - 1) * cellW + cellW/2 - offsetX;
-      const lastColRightEdge = lastColCenter + cellW/2;
-
-      // Last row position (using cropped numRows)
-      const lastRowCenter = (numRows - 1) * cellH + cellH/2 - offsetY;
-      const lastRowBottomEdge = lastRowCenter + cellH/2;
-
-      // Get column labels (accounting for crop)
-      const colLabels = dataState.colLabels || [];
-      const startColIdx = filteredIdxDict ? filteredIdxDict.startX : 0;
-      const endColIdx = filteredIdxDict ? filteredIdxDict.endX : colLabels.length - 1;
-      const firstColName = colLabels[startColIdx]?.text || 'N/A';
-      const lastColName = colLabels[endColIdx]?.text || 'N/A';
-
-      // Get row labels (accounting for crop)
-      viewState.target = [
-        clamp(viewState.target[0], minX, maxX),
-        clamp(viewState.target[1], minY, maxY)
-      ];
-    }
-
-    // 5) Recompute visibleBounds for the new viewState
-    if (viewId === IDS.VIEWS.HEATMAP_GRID && heatmapState && dataState && dimensions) {
-      const { width: cellW, height: cellH } = heatmapState.cellDimensions;
+      // --- Calculate offsets generically based on BASE_ZOOM ---
+      const { width: cellWidth, height: cellHeight } = heatmapState.cellDimensions;
       const { numColumns, numRows } = dataState;
-      const scale = 2 ** (viewState.zoom - BASE_ZOOM);
-      const viewW = heatmapState.width  / scale;
-      const viewH = heatmapState.height / scale;
-
-      // Generic calculation based on BASE_ZOOM
       const baseScaleFactor = Math.pow(2, BASE_ZOOM);
-      const halfW = viewW / 2 / baseScaleFactor;
-      const halfH = viewH / 2 / baseScaleFactor;
-      const offsetX = heatmapState.width  / 2 / baseScaleFactor;
+      const offsetX = heatmapState.width / 2 / baseScaleFactor;
       const offsetY = heatmapState.height / 2 / baseScaleFactor;
-
-      const area = {
-        minX: viewState.target[0] - halfW,
-        maxX: viewState.target[0] + halfW,
-        minY: viewState.target[1] - halfH,
-        maxY: viewState.target[1] + halfH,
+      const visibleArea = {
+        minX: -offsetX,
+        minY: -offsetY,
+        maxX: offsetX,
+        maxY: offsetY
       };
 
-      // Calculate visible bounds in the CURRENT coordinate system (which may be cropped)
-      // These are "adjusted" indices (0-based within the visible/cropped area)
-      const adjustedStartCol = clamp(Math.floor((area.minX + offsetX) / cellW), 0, numColumns - 1);
-      const adjustedEndCol   = clamp(Math.ceil ((area.maxX + offsetX) / cellW), 0, numColumns - 1);
-      const adjustedStartRow = clamp(Math.floor((area.minY + offsetY) / cellH), 0, numRows    - 1);
-      const adjustedEndRow   = clamp(Math.ceil ((area.maxY + offsetY) / cellH), 0, numRows    - 1);
+      // 1. Calculate the visible range of row and column INDICES from the visibleArea coordinates.
+      // We use Math.floor for the start and Math.ceil for the end to ensure we cover partial cells.
+      const startCol = Math.max(0, Math.floor((visibleArea.minX + offsetX) / cellWidth));
+      const endCol = Math.min(numColumns - 1, Math.ceil((visibleArea.maxX + offsetX) / cellWidth));
 
-      // When filtering is active, translate adjusted indices back to ORIGINAL data indices
-      // The scatter layer expects original indices to look up values from the original data arrays
-      let startCol: number, endCol: number, startRow: number, endRow: number;
+      const startRow = Math.max(0, Math.floor((visibleArea.minY + offsetY) / cellHeight));
+      const endRow = Math.min(numRows - 1, Math.ceil((visibleArea.maxY + offsetY) / cellHeight));
 
-      if (filteredIdxDict) {
-        // Add the filter offset to get original indices
-        startCol = clamp(adjustedStartCol + filteredIdxDict.startX, filteredIdxDict.startX, filteredIdxDict.endX);
-        endCol   = clamp(adjustedEndCol + filteredIdxDict.startX, filteredIdxDict.startX, filteredIdxDict.endX);
-        startRow = clamp(adjustedStartRow + filteredIdxDict.startY, filteredIdxDict.startY, filteredIdxDict.endY);
-        endRow   = clamp(adjustedEndRow + filteredIdxDict.startY, filteredIdxDict.startY, filteredIdxDict.endY);
-      } else {
-        startCol = adjustedStartCol;
-        endCol = adjustedEndCol;
-        startRow = adjustedStartRow;
-        endRow = adjustedEndRow;
+      // Set visibleBounds - this is what the scatter layer uses for viewport culling
+      setVisibleBounds({ startRow, endRow, startCol, endCol });
+    }
+  }, [
+    heatmapState?.cellDimensions?.width,
+    heatmapState?.cellDimensions?.height,
+    dataState?.numRows,      // Re-run when data size changes (e.g., after reset)
+    dataState?.numColumns,   // Re-run when data size changes (e.g., after reset)
+    heatmapState?.width,     // Re-run when heatmap dimensions change
+    heatmapState?.height
+  ]);
+
+  const onViewStateChange = useCallback(
+    (params: ViewStateChangeProps) => {
+      const { viewId, viewState } = params;
+
+      // 1) Skip if search‑animation is controlling the camera
+      if (isSearchZooming) {
+        return;
       }
 
-      // Store bounds - debounced to avoid layer recreation on every zoom frame
-      debouncedSetVisibleBounds({ startRow, endRow, startCol, endCol });
-    }
+      // 2) Grab the previous heatmap viewState from the ref
+      const prevVS = viewStateRef.current[IDS.VIEWS.HEATMAP_GRID];
 
-    // 6) Finally, push all three viewStates back into React state
-    if (viewId === IDS.VIEWS.HEATMAP_GRID) {
-      setViewStates((cur) => ({
-        [IDS.VIEWS.COL_LABELS]: {
-          ...cur[IDS.VIEWS.COL_LABELS],
-          zoom:   [viewState.zoom, BASE_ZOOM],
-          target: [viewState.target[0], 0]
-        },
-        [IDS.VIEWS.ROW_LABELS]: {
-          ...cur[IDS.VIEWS.ROW_LABELS],
-          zoom:   [BASE_ZOOM, viewState.zoom],
-          target: [0, viewState.target[1]]
-        },
-        [IDS.VIEWS.HEATMAP_GRID]: {
-          ...viewState
+      // 3) If we’re in the HEATMAP_GRID and zoom actually changed, snap target back
+      if (
+        viewId === IDS.VIEWS.HEATMAP_GRID &&
+        viewState.zoom !== prevVS.zoom
+      ) {
+        viewState.target = [...prevVS.target];
+      }
+
+      // 4) Your existing constraints: keep target within data bounds
+      if (heatmapState && dataState && dimensions) {
+        const cellW = heatmapState.cellDimensions.width;
+        const cellH = heatmapState.cellDimensions.height;
+
+        // When cropping, use cropped dimensions for constraints
+        const numCols = filteredIdxDict
+          ? (filteredIdxDict.endX - filteredIdxDict.startX + 1)
+          : dataState.numColumns;
+        const numRows = filteredIdxDict
+          ? (filteredIdxDict.endY - filteredIdxDict.startY + 1)
+          : dataState.numRows;
+
+        const dataW = numCols * cellW;
+        const dataH = numRows * cellH;
+
+        // Calculate how big the viewport is in world‐space
+        const scale = 2 ** (viewState.zoom - BASE_ZOOM);
+        const viewW = heatmapState.width / scale;
+        const viewH = heatmapState.height / scale;
+
+        // Generic calculation based on BASE_ZOOM
+        const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+        const halfW = viewW / 2 / baseScaleFactor;
+        const halfH = viewH / 2 / baseScaleFactor;
+
+        const offsetX = heatmapState.width / 2 / baseScaleFactor;
+        const offsetY = heatmapState.height / 2 / baseScaleFactor;
+
+        const minX = -offsetX + halfW;
+        const minY = -offsetY + halfH;
+        const maxX = dataW - offsetX - halfW;
+        const maxY = dataH - offsetY - halfH;
+
+        // Calculate what world coordinates are visible at current target
+        const visibleLeft = viewState.target[0] - halfW;
+        const visibleRight = viewState.target[0] + halfW;
+        const visibleTop = viewState.target[1] - halfH;
+        const visibleBottom = viewState.target[1] + halfH;
+
+        // Data bounds in world coordinates
+        const dataLeft = -offsetX;
+        const dataRight = dataW - offsetX;
+        const dataTop = -offsetY;
+        const dataBottom = dataH - offsetY;
+
+        // Last column position (using cropped numCols)
+        const lastColCenter = (numCols - 1) * cellW + cellW / 2 - offsetX;
+        const lastColRightEdge = lastColCenter + cellW / 2;
+
+        // Last row position (using cropped numRows)
+        const lastRowCenter = (numRows - 1) * cellH + cellH / 2 - offsetY;
+        const lastRowBottomEdge = lastRowCenter + cellH / 2;
+
+        // Get column labels (accounting for crop)
+        const colLabels = dataState.colLabels || [];
+        const startColIdx = filteredIdxDict ? filteredIdxDict.startX : 0;
+        const endColIdx = filteredIdxDict ? filteredIdxDict.endX : colLabels.length - 1;
+        const firstColName = colLabels[startColIdx]?.text || 'N/A';
+        const lastColName = colLabels[endColIdx]?.text || 'N/A';
+
+        // Get row labels (accounting for crop)
+        viewState.target = [
+          clamp(viewState.target[0], minX, maxX),
+          clamp(viewState.target[1], minY, maxY)
+        ];
+      }
+
+      // 5) Recompute visibleBounds for the new viewState
+      if (viewId === IDS.VIEWS.HEATMAP_GRID && heatmapState && dataState && dimensions) {
+        const { width: cellW, height: cellH } = heatmapState.cellDimensions;
+        const { numColumns, numRows } = dataState;
+        const scale = 2 ** (viewState.zoom - BASE_ZOOM);
+        const viewW = heatmapState.width / scale;
+        const viewH = heatmapState.height / scale;
+
+        // Generic calculation based on BASE_ZOOM
+        const baseScaleFactor = Math.pow(2, BASE_ZOOM);
+        const halfW = viewW / 2 / baseScaleFactor;
+        const halfH = viewH / 2 / baseScaleFactor;
+        const offsetX = heatmapState.width / 2 / baseScaleFactor;
+        const offsetY = heatmapState.height / 2 / baseScaleFactor;
+
+        const area = {
+          minX: viewState.target[0] - halfW,
+          maxX: viewState.target[0] + halfW,
+          minY: viewState.target[1] - halfH,
+          maxY: viewState.target[1] + halfH,
+        };
+
+        // Calculate visible bounds in the CURRENT coordinate system (which may be cropped)
+        // These are "adjusted" indices (0-based within the visible/cropped area)
+        const adjustedStartCol = clamp(Math.floor((area.minX + offsetX) / cellW), 0, numColumns - 1);
+        const adjustedEndCol = clamp(Math.ceil((area.maxX + offsetX) / cellW), 0, numColumns - 1);
+        const adjustedStartRow = clamp(Math.floor((area.minY + offsetY) / cellH), 0, numRows - 1);
+        const adjustedEndRow = clamp(Math.ceil((area.maxY + offsetY) / cellH), 0, numRows - 1);
+
+        // When filtering is active, translate adjusted indices back to ORIGINAL data indices
+        // The scatter layer expects original indices to look up values from the original data arrays
+        let startCol: number, endCol: number, startRow: number, endRow: number;
+
+        if (filteredIdxDict) {
+          // Add the filter offset to get original indices
+          startCol = clamp(adjustedStartCol + filteredIdxDict.startX, filteredIdxDict.startX, filteredIdxDict.endX);
+          endCol = clamp(adjustedEndCol + filteredIdxDict.startX, filteredIdxDict.startX, filteredIdxDict.endX);
+          startRow = clamp(adjustedStartRow + filteredIdxDict.startY, filteredIdxDict.startY, filteredIdxDict.endY);
+          endRow = clamp(adjustedEndRow + filteredIdxDict.startY, filteredIdxDict.startY, filteredIdxDict.endY);
+        } else {
+          startCol = adjustedStartCol;
+          endCol = adjustedEndCol;
+          startRow = adjustedStartRow;
+          endRow = adjustedEndRow;
         }
-      }));
-    }
-  },
-  [
-    heatmapState,
-    dataState,
-    dimensions,
-    isSearchZooming,
-    filteredIdxDict,  // Add this so pan constraints update when crop changes
-    debouncedSetVisibleBounds
-  ]
-);
+
+        // Store bounds - debounced to avoid layer recreation on every zoom frame
+        debouncedSetVisibleBounds({ startRow, endRow, startCol, endCol });
+      }
+
+      // 6) Finally, push all three viewStates back into React state
+      if (viewId === IDS.VIEWS.HEATMAP_GRID) {
+        setViewStates((cur) => ({
+          [IDS.VIEWS.COL_LABELS]: {
+            ...cur[IDS.VIEWS.COL_LABELS],
+            zoom: [viewState.zoom, BASE_ZOOM],
+            target: [viewState.target[0], 0]
+          },
+          [IDS.VIEWS.ROW_LABELS]: {
+            ...cur[IDS.VIEWS.ROW_LABELS],
+            zoom: [BASE_ZOOM, viewState.zoom],
+            target: [0, viewState.target[1]]
+          },
+          [IDS.VIEWS.HEATMAP_GRID]: {
+            ...viewState
+          }
+        }));
+      }
+    },
+    [
+      heatmapState,
+      dataState,
+      dimensions,
+      isSearchZooming,
+      filteredIdxDict,  // Add this so pan constraints update when crop changes
+      debouncedSetVisibleBounds
+    ]
+  );
+
+  //   const onViewStateChange = useCallback(
+  //     (params: ViewStateChangeProps) => {
+  //       // Skip external view state changes if a search zoom is in progress
+  //       if (isSearchZooming) {
+  //         return;
+  //       }
+
+  //       // const { viewId, viewState } = params;
+  //       // 1) Pull out the interactionState
+  //     const { viewId, viewState, interactionState } = params;
+
+  //     // 2) If this is a heatmap-grid zoom, freeze the target
+  //     if (
+  //       viewId === IDS.VIEWS.HEATMAP_GRID &&
+  //       interactionState.isZooming
+  //     ) {
+  //       // grab last-known target from the ref
+  //       const prevTarget = viewStateRef.current[IDS.VIEWS.HEATMAP_GRID].target;
+  //       viewState.target = [prevTarget[0], prevTarget[1]];
+  //     }
+
+  //       const { zoom } = viewState;
+
+  //       console.log('***** checkpoint 1 for target *********',viewState.target)
+
+  //       // Add zoom threshold detection
+  //       if (viewId === IDS.VIEWS.HEATMAP_GRID) {
+  //         // Define zoom threshold (adjust this value based on testing)
+  //         const ZOOM_OUT_THRESHOLD = BASE_ZOOM - 1.5;
+
+  //         // Check if we've crossed the threshold
+  //         if (zoom < ZOOM_OUT_THRESHOLD && !isZoomedOut) {
+  //           setIsZoomedOut(true);
+  //         } else if (zoom >= ZOOM_OUT_THRESHOLD && isZoomedOut) {
+  //           setIsZoomedOut(false);
+  //         }
+  //       }
+
+  //       console.log('***** checkpoint 2 for target *********',viewState.target)
 
 
+  //       const nextScaleFactor = 2 ** (zoom - BASE_ZOOM);
+
+  //       // Constraint logic
+  //       if (heatmapState && dataState && dimensions) {
+  //         const cellWidth = heatmapState.cellDimensions.width;
+  //         const cellHeight = heatmapState.cellDimensions.height;
+  //         const dataWidth = dataState.numColumns * cellWidth;
+  //         const dataHeight = dataState.numRows * cellHeight;
+
+  //         const visibleWidth = heatmapState.width / nextScaleFactor;
+  //         const visibleHeight = heatmapState.height / nextScaleFactor;
+
+  //         // Calculate offset used in getHeatmapState
+  //         const heatmapWidth = heatmapState.width;
+  //         const heatmapHeight = heatmapState.height;
+  //         const offsetX = heatmapWidth / 4;
+  //         const offsetY = heatmapHeight / 4;
+
+  //         // Calculate half-dimensions of the visible viewport in world coordinates
+  //         const halfVisibleWidth = visibleWidth / 4;
+  //         const halfVisibleHeight = visibleHeight / 4;
+  //         // const halfVisibleWidth = 0
+  //         // const halfVisibleHeight = 0
+
+  //         // Minimum target constraints (to prevent white space at left/top)
+  //         // The minimum target should be: data's top-left corner plus half the visible area
+  //         const minTargetX = -offsetX + halfVisibleWidth;
+  //         const minTargetY = -offsetY + halfVisibleHeight;
+
+  //         // Maximum target constraints (to prevent white space at right/bottom)
+  //         const maxTargetX = dataWidth - offsetX - halfVisibleWidth;
+
+  //         // ********** 17 is added because last two rows are not visible, dont know why ********** //
+  //         const maxTargetY = dataHeight - offsetY - halfVisibleHeight+17;
+
+  //         // Apply constraints
+  //         viewState.target = [
+  //           clamp(viewState.target[X], minTargetX, maxTargetX),
+  //           clamp(viewState.target[Y], minTargetY, maxTargetY),
+  //         ];
+  //       }
+
+  //       console.log('***** checkpoint 3 for target *********',viewState.target)
 
 
+  // // This is the optimized replacement for the block inside your onViewStateChange handler
 
+  // if (viewId === IDS.VIEWS.HEATMAP_GRID && heatmapState && dataState && dimensions) {
+  //   // --- Your original, trusted logic for calculating visible area ---
+  //   // This part is kept exactly as you wrote it.
+  //   const { cellDimensions } = heatmapState;
+  //   const { width: cellWidth, height: cellHeight } = cellDimensions;
+  //   const { numColumns, numRows } = dataState;
+  //   const offsetX = heatmapState.width / 4;
+  //   const offsetY = heatmapState.height / 4;
 
+  //   // The `zoom` and `BASE_ZOOM` are needed for your scale factor calculation
+  //   const { zoom } = viewState;
+  //   const nextScaleFactor = 2 ** (zoom - BASE_ZOOM);
 
+  //   const actualViewWidth = heatmapState.width / nextScaleFactor;
+  //   const actualViewHeight = heatmapState.height / nextScaleFactor;
 
+  //   const visibleArea = {
+  //       minX: viewState.target[0] - (actualViewWidth / 4),
+  //       minY: viewState.target[1] - (actualViewHeight / 4),
+  //       maxX: viewState.target[0] + (actualViewWidth / 4),
+  //       maxY: viewState.target[1] + (actualViewHeight / 4)
+  //   };
 
+  //   console.log('********* visibleArea is as follows *********',visibleArea)
 
-//   const onViewStateChange = useCallback(
-//     (params: ViewStateChangeProps) => {
-//       // Skip external view state changes if a search zoom is in progress
-//       if (isSearchZooming) {
-//         return;
-//       }
-      
-//       // const { viewId, viewState } = params;
-//       // 1) Pull out the interactionState
-//     const { viewId, viewState, interactionState } = params;
+  //   // --- START: OPTIMIZED REPLACEMENT FOR THE for-loop ---
 
-//     // 2) If this is a heatmap-grid zoom, freeze the target
-//     if (
-//       viewId === IDS.VIEWS.HEATMAP_GRID &&
-//       interactionState.isZooming
-//     ) {
-//       // grab last-known target from the ref
-//       const prevTarget = viewStateRef.current[IDS.VIEWS.HEATMAP_GRID].target;
-//       viewState.target = [prevTarget[0], prevTarget[1]];
-//     }
+  //   // 1. Calculate the visible range of row and column INDICES.
+  //   //    This converts the world coordinates from your visibleArea into grid indices.
+  //   const startCol = clamp(Math.floor((visibleArea.minX + offsetX) / cellWidth), 0, numColumns - 1);
+  //   const endCol = clamp(Math.ceil((visibleArea.maxX + offsetX) / cellWidth), 0, numColumns - 1);
+  //   const startRow = clamp(Math.floor((visibleArea.minY + offsetY) / cellHeight), 0, numRows - 1);
+  //   const endRow = clamp(Math.ceil((visibleArea.maxY + offsetY) / cellHeight), 0, numRows - 1);
 
-//       const { zoom } = viewState;
+  //   // 2. Build the array of visible indices directly from this much smaller range.
+  //   //    This is extremely fast and avoids checking millions of cells.
+  //   const newVisibleIndices = [];
+  //   // This assumes your data is in row-major order, which it is.
+  //   for (let r = startRow; r <= endRow; r++) {
+  //       for (let c = startCol; c <= endCol; c++) {
+  //           // The formula for finding a cell's index in a row-major grid.
+  //           const cellIndex = r * numColumns + c;
+  //           newVisibleIndices.push(cellIndex);
+  //       }
+  //   }
 
-//       console.log('***** checkpoint 1 for target *********',viewState.target)
+  //   console.log('🚀 NEW VISIBLE INDICES FROM onViewStateChange:', {
+  //     count: newVisibleIndices.length,
+  //     first10: newVisibleIndices.slice(0, 10),
+  //     last10: newVisibleIndices.slice(-10),
+  //     viewStateTarget: viewState.target,
+  //     zoom: viewState.zoom
+  //   });
 
-//       // Add zoom threshold detection
-//       if (viewId === IDS.VIEWS.HEATMAP_GRID) {
-//         // Define zoom threshold (adjust this value based on testing)
-//         const ZOOM_OUT_THRESHOLD = BASE_ZOOM - 1.5;
-        
-//         // Check if we've crossed the threshold
-//         if (zoom < ZOOM_OUT_THRESHOLD && !isZoomedOut) {
-//           setIsZoomedOut(true);
-//         } else if (zoom >= ZOOM_OUT_THRESHOLD && isZoomedOut) {
-//           setIsZoomedOut(false);
-//         }
-//       }
-  
-//       console.log('***** checkpoint 2 for target *********',viewState.target)
+  //   setVisibleIndices(newVisibleIndices);
 
+  //   // --- END: OPTIMIZED REPLACEMENT ---
+  // }
+  // console.log('***** checkpoint 4 for target *********',viewState.target)
 
-//       const nextScaleFactor = 2 ** (zoom - BASE_ZOOM);
-  
-//       // Constraint logic
-//       if (heatmapState && dataState && dimensions) {
-//         const cellWidth = heatmapState.cellDimensions.width;
-//         const cellHeight = heatmapState.cellDimensions.height;
-//         const dataWidth = dataState.numColumns * cellWidth;
-//         const dataHeight = dataState.numRows * cellHeight;
-
-//         const visibleWidth = heatmapState.width / nextScaleFactor;
-//         const visibleHeight = heatmapState.height / nextScaleFactor;
-        
-//         // Calculate offset used in getHeatmapState
-//         const heatmapWidth = heatmapState.width;
-//         const heatmapHeight = heatmapState.height;
-//         const offsetX = heatmapWidth / 4;
-//         const offsetY = heatmapHeight / 4;
-        
-//         // Calculate half-dimensions of the visible viewport in world coordinates
-//         const halfVisibleWidth = visibleWidth / 4;
-//         const halfVisibleHeight = visibleHeight / 4;
-//         // const halfVisibleWidth = 0
-//         // const halfVisibleHeight = 0
-        
-//         // Minimum target constraints (to prevent white space at left/top)
-//         // The minimum target should be: data's top-left corner plus half the visible area
-//         const minTargetX = -offsetX + halfVisibleWidth;
-//         const minTargetY = -offsetY + halfVisibleHeight;
-        
-//         // Maximum target constraints (to prevent white space at right/bottom)
-//         const maxTargetX = dataWidth - offsetX - halfVisibleWidth;
-
-//         // ********** 17 is added because last two rows are not visible, dont know why ********** //
-//         const maxTargetY = dataHeight - offsetY - halfVisibleHeight+17;
-        
-//         // Apply constraints
-//         viewState.target = [
-//           clamp(viewState.target[X], minTargetX, maxTargetX),
-//           clamp(viewState.target[Y], minTargetY, maxTargetY),
-//         ];
-//       }
-
-//       console.log('***** checkpoint 3 for target *********',viewState.target)
-
-
-// // This is the optimized replacement for the block inside your onViewStateChange handler
-
-// if (viewId === IDS.VIEWS.HEATMAP_GRID && heatmapState && dataState && dimensions) {
-//   // --- Your original, trusted logic for calculating visible area ---
-//   // This part is kept exactly as you wrote it.
-//   const { cellDimensions } = heatmapState;
-//   const { width: cellWidth, height: cellHeight } = cellDimensions;
-//   const { numColumns, numRows } = dataState;
-//   const offsetX = heatmapState.width / 4;
-//   const offsetY = heatmapState.height / 4;
-  
-//   // The `zoom` and `BASE_ZOOM` are needed for your scale factor calculation
-//   const { zoom } = viewState;
-//   const nextScaleFactor = 2 ** (zoom - BASE_ZOOM);
-
-//   const actualViewWidth = heatmapState.width / nextScaleFactor;
-//   const actualViewHeight = heatmapState.height / nextScaleFactor;
-  
-//   const visibleArea = {
-//       minX: viewState.target[0] - (actualViewWidth / 4),
-//       minY: viewState.target[1] - (actualViewHeight / 4),
-//       maxX: viewState.target[0] + (actualViewWidth / 4),
-//       maxY: viewState.target[1] + (actualViewHeight / 4)
-//   };
-
-//   console.log('********* visibleArea is as follows *********',visibleArea)
-  
-//   // --- START: OPTIMIZED REPLACEMENT FOR THE for-loop ---
-
-//   // 1. Calculate the visible range of row and column INDICES.
-//   //    This converts the world coordinates from your visibleArea into grid indices.
-//   const startCol = clamp(Math.floor((visibleArea.minX + offsetX) / cellWidth), 0, numColumns - 1);
-//   const endCol = clamp(Math.ceil((visibleArea.maxX + offsetX) / cellWidth), 0, numColumns - 1);
-//   const startRow = clamp(Math.floor((visibleArea.minY + offsetY) / cellHeight), 0, numRows - 1);
-//   const endRow = clamp(Math.ceil((visibleArea.maxY + offsetY) / cellHeight), 0, numRows - 1);
-
-//   // 2. Build the array of visible indices directly from this much smaller range.
-//   //    This is extremely fast and avoids checking millions of cells.
-//   const newVisibleIndices = [];
-//   // This assumes your data is in row-major order, which it is.
-//   for (let r = startRow; r <= endRow; r++) {
-//       for (let c = startCol; c <= endCol; c++) {
-//           // The formula for finding a cell's index in a row-major grid.
-//           const cellIndex = r * numColumns + c;
-//           newVisibleIndices.push(cellIndex);
-//       }
-//   }
-
-//   console.log('🚀 NEW VISIBLE INDICES FROM onViewStateChange:', {
-//     count: newVisibleIndices.length,
-//     first10: newVisibleIndices.slice(0, 10),
-//     last10: newVisibleIndices.slice(-10),
-//     viewStateTarget: viewState.target,
-//     zoom: viewState.zoom
-//   });
-
-//   setVisibleIndices(newVisibleIndices);
-
-//   // --- END: OPTIMIZED REPLACEMENT ---
-// }
-// console.log('***** checkpoint 4 for target *********',viewState.target)
-
-//       // Update all view states
-//       if (viewId === IDS.VIEWS.HEATMAP_GRID) {
-//         setViewStates((currentViewStates: ViewStates) => ({
-//           [IDS.VIEWS.COL_LABELS]: {
-//             ...currentViewStates[IDS.VIEWS.ROW_LABELS],
-//             zoom: [viewState.zoom, BASE_ZOOM],
-//             target: [viewState.target[X], 0],
-//           },
-//           [IDS.VIEWS.ROW_LABELS]: {
-//             ...currentViewStates[IDS.VIEWS.ROW_LABELS],
-//             zoom: [BASE_ZOOM, viewState.zoom],
-//             target: [0, viewState.target[Y]],
-//           },
-//           [IDS.VIEWS.HEATMAP_GRID]: {
-//             ...viewState,
-//           },
-//         }));
-//       }
-//       console.log('***** checkpoint 5 for target *********',viewState.target)
-//     },
-//     [dataState, heatmapState, dimensions, isSearchZooming]
-//   );
+  //       // Update all view states
+  //       if (viewId === IDS.VIEWS.HEATMAP_GRID) {
+  //         setViewStates((currentViewStates: ViewStates) => ({
+  //           [IDS.VIEWS.COL_LABELS]: {
+  //             ...currentViewStates[IDS.VIEWS.ROW_LABELS],
+  //             zoom: [viewState.zoom, BASE_ZOOM],
+  //             target: [viewState.target[X], 0],
+  //           },
+  //           [IDS.VIEWS.ROW_LABELS]: {
+  //             ...currentViewStates[IDS.VIEWS.ROW_LABELS],
+  //             zoom: [BASE_ZOOM, viewState.zoom],
+  //             target: [0, viewState.target[Y]],
+  //           },
+  //           [IDS.VIEWS.HEATMAP_GRID]: {
+  //             ...viewState,
+  //           },
+  //         }));
+  //       }
+  //       console.log('***** checkpoint 5 for target *********',viewState.target)
+  //     },
+  //     [dataState, heatmapState, dimensions, isSearchZooming]
+  //   );
 
   // Function to reset view to origin (useful after cropping)
   const resetViewToOrigin = useCallback(() => {

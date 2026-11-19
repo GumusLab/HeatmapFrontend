@@ -408,16 +408,46 @@ export const validateWorkflowActionAgainstDataset = (
     if (action.type === 'sort_by_expression') {
         const feature = action.parameters.feature;
 
-        if (action.target !== 'columns') {
+
+        const hasRowMetadata = context.rowMetadataFields.length > 0;
+        const hasColMetadata = context.columnMetadataFields.length > 0;
+
+        // Determine which physical axis contains biological features.
+        // This follows the current frontend inference convention.
+        const expectedTarget =
+            hasRowMetadata && !hasColMetadata
+                ? 'rows'
+                : hasColMetadata && !hasRowMetadata
+                    ? 'columns'
+                    : !hasRowMetadata && !hasColMetadata
+                        ? 'columns'
+                        : null;
+
+        // Metadata on both axes does not establish biological identity.
+        if (expectedTarget === null) {
             return {
                 status: 'needs_resolution',
                 issues: [
                     {
                         code: 'INVALID_PARAMETER',
                         message:
-                            'Expression sorting must target columns.',
+                            'Cannot determine the expression-sort target because both axes contain metadata. The feature axis must be resolved explicitly.',
+                        parameter: 'target'
+                    }
+                ]
+            };
+        }
+
+        if (action.target !== expectedTarget) {
+            return {
+                status: 'needs_resolution',
+                issues: [
+                    {
+                        code: 'INVALID_PARAMETER',
+                        message:
+                            `Expression sorting must target ${expectedTarget} for this dataset.`,
                         parameter: 'target',
-                        availableValues: ['columns']
+                        availableValues: [expectedTarget]
                     }
                 ]
             };

@@ -100,6 +100,7 @@ interface AnalysisSnapshot {
     colCat: string[];
     sortByColCat: string;
     sortColsByRowName: string | null;
+    sortRowsByColName: string | null;
   };
 
   matrixOrientation: string;
@@ -210,7 +211,16 @@ export const DeckGLHeatmap = ({
     axis: zScoreAxis,
     reZscoreFilteredSubset
   };
-  const [order, setOrder] = useState({ row: "alphabetically", col: "alphabetically", rowCat: [] as string[], sortByRowCat: "", colCat: [] as string[], sortByColCat: "", sortColsByRowName: null as string | null });
+  const [order, setOrder] = useState({
+    row: "alphabetically",
+    col: "alphabetically",
+    rowCat: [] as string[],
+    sortByRowCat: "",
+    colCat: [] as string[],
+    sortByColCat: "",
+    sortColsByRowName: null as string | null,
+    sortRowsByColName: null as string | null
+  });
   // const [order, setOrder] = useState();
   // const [catTemp, setCatTemp] = useState(categories);
 
@@ -334,6 +344,9 @@ export const DeckGLHeatmap = ({
     actions: WorkflowAction[];
     preImportSnapshot: AnalysisSnapshot;
     baselineDataStateVersion: number;
+    preImportWorkflowHistory: WorkflowHistoryState;
+    preImportUndoStack: AnalysisSnapshot[];
+    preImportRedoStack: AnalysisSnapshot[];
     phase:
     | 'waiting_for_baseline'
     | 'running_action'
@@ -677,7 +690,8 @@ export const DeckGLHeatmap = ({
       sortByRowCat: '',
       colCat: baselineColumnCategories,
       sortByColCat: '',
-      sortColsByRowName: null
+      sortColsByRowName: null,
+      sortRowsByColName: null
     });
 
     setFilters({
@@ -709,6 +723,20 @@ export const DeckGLHeatmap = ({
       replay.preImportSnapshot
     );
 
+    setWorkflowHistory(
+      replay.preImportWorkflowHistory
+    );
+
+    undoStackRef.current = [
+      ...replay.preImportUndoStack
+    ];
+
+    redoStackRef.current = [
+      ...replay.preImportRedoStack
+    ];
+
+    setHistoryVersion(prev => prev + 1);
+
     setToastMessage(
       'Imported workflow failed. Your previous analysis was restored.'
     );
@@ -726,6 +754,15 @@ export const DeckGLHeatmap = ({
     const existingReplay =
       pendingImportedWorkflowReplayRef.current;
 
+    setWorkflowHistory(
+      createEmptyWorkflowHistory()
+    );
+
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+
+    setHistoryVersion(prev => prev + 1);
+
     if (
       existingReplay?.phase === 'waiting_for_baseline' ||
       existingReplay?.phase === 'running_action' ||
@@ -741,8 +778,25 @@ export const DeckGLHeatmap = ({
 
     pendingImportedWorkflowReplayRef.current = {
       actions: [...actions],
+
       preImportSnapshot: createAnalysisSnapshot(),
-      baselineDataStateVersion: datastateVersion + 1,
+
+      preImportWorkflowHistory: {
+        actions: [...workflowHistory.actions],
+        cursor: workflowHistory.cursor
+      },
+
+      preImportUndoStack: [
+        ...undoStackRef.current
+      ],
+
+      preImportRedoStack: [
+        ...redoStackRef.current
+      ],
+
+      baselineDataStateVersion:
+        datastateVersion + 1,
+
       phase: 'waiting_for_baseline',
       index: 0
     };
@@ -753,6 +807,64 @@ export const DeckGLHeatmap = ({
     );
 
     resetAnalysisForImportedWorkflow();
+  };
+
+  const completeImportedWorkflowAction = (
+    action: WorkflowAction
+  ) => {
+    const replay =
+      pendingImportedWorkflowReplayRef.current;
+
+    if (
+      !replay ||
+      replay.phase !== 'running_action'
+    ) {
+      return;
+    }
+
+    const importedAction: WorkflowAction = {
+      ...action,
+      source: 'imported'
+    };
+
+    setWorkflowHistory(prev =>
+      appendWorkflowAction(
+        prev,
+        importedAction
+      )
+    );
+
+    replay.index += 1;
+    replay.phase = 'ready_for_next_action';
+
+    console.log(
+      '✅ IMPORTED ACTION COMPLETED',
+      importedAction
+    );
+
+    console.log(
+      '⏭️ NEXT IMPORTED ACTION INDEX',
+      replay.index
+    );
+  };
+
+  const saveImportedWorkflowUndoPoint = (
+    workflowCursor: number
+  ) => {
+    const snapshot: AnalysisSnapshot = {
+      ...createAnalysisSnapshot(),
+      workflowCursor
+    };
+
+    undoStackRef.current.push(snapshot);
+
+    if (undoStackRef.current.length > MAX_HISTORY) {
+      undoStackRef.current.shift();
+    }
+
+    redoStackRef.current = [];
+
+    setHistoryVersion(prev => prev + 1);
   };
 
   const executeImportedWorkflowAction = (
@@ -776,28 +888,7 @@ export const DeckGLHeatmap = ({
           reZscoreFilteredSubset
         },
         () => {
-          const replay =
-            pendingImportedWorkflowReplayRef.current;
-
-          if (
-            !replay ||
-            replay.phase !== 'running_action'
-          ) {
-            return;
-          }
-
-          replay.index += 1;
-          replay.phase = 'ready_for_next_action';
-
-          console.log(
-            '✅ IMPORTED ACTION COMPLETED',
-            action
-          );
-
-          console.log(
-            '⏭️ NEXT IMPORTED ACTION INDEX',
-            replay.index
-          );
+          completeImportedWorkflowAction(action);
         }
       );
 
@@ -825,28 +916,7 @@ export const DeckGLHeatmap = ({
           reZscoreFilteredSubset: enabled
         },
         () => {
-          const replay =
-            pendingImportedWorkflowReplayRef.current;
-
-          if (
-            !replay ||
-            replay.phase !== 'running_action'
-          ) {
-            return;
-          }
-
-          replay.index += 1;
-          replay.phase = 'ready_for_next_action';
-
-          console.log(
-            '✅ IMPORTED ACTION COMPLETED',
-            action
-          );
-
-          console.log(
-            '⏭️ NEXT IMPORTED ACTION INDEX',
-            replay.index
-          );
+          completeImportedWorkflowAction(action);
         }
       );
 
@@ -1733,12 +1803,13 @@ export const DeckGLHeatmap = ({
         action
       );
 
+
       setOrder(prev => {
         if (action.target === 'rows') {
           return {
             ...prev,
             sortByRowCat: field,
-            sortColsByRowName: null
+            sortRowsByColName: null
           };
         }
 
@@ -1761,13 +1832,23 @@ export const DeckGLHeatmap = ({
         action
       );
 
-      setOrder(prev => ({
-        ...prev,
-        col: '',
-        sortByColCat: '',
-        sortColsByRowName: feature
-      }));
+      setOrder(prev => {
+        if (action.target === 'rows') {
+          return {
+            ...prev,
+            row: '',
+            sortByRowCat: '',
+            sortRowsByColName: feature
+          };
+        }
 
+        return {
+          ...prev,
+          col: '',
+          sortByColCat: '',
+          sortColsByRowName: feature
+        };
+      });
       return true;
     }
 
@@ -1858,13 +1939,14 @@ export const DeckGLHeatmap = ({
         action
       );
 
+
       setOrder(prev => {
         if (action.target === 'rows') {
           return {
             ...prev,
             row: method,
             sortByRowCat: '',
-            sortColsByRowName: null
+            sortRowsByColName: null
           };
         }
 
@@ -1883,9 +1965,11 @@ export const DeckGLHeatmap = ({
           col: method,
           sortByRowCat: '',
           sortByColCat: '',
-          sortColsByRowName: null
+          sortColsByRowName: null,
+          sortRowsByColName: null
         };
       });
+
 
       return true;
     }
@@ -1903,7 +1987,7 @@ export const DeckGLHeatmap = ({
           ...prev,
           row: 'cluster',
           sortByRowCat: '',
-          sortColsByRowName: null
+          sortRowsByColName: null
         }));
 
         return true;
@@ -1927,7 +2011,8 @@ export const DeckGLHeatmap = ({
           col: 'cluster',
           sortByRowCat: '',
           sortByColCat: '',
-          sortColsByRowName: null
+          sortColsByRowName: null,
+          sortRowsByColName: null
         }));
 
         return true;
@@ -1972,6 +2057,10 @@ export const DeckGLHeatmap = ({
         return;
       }
 
+      saveImportedWorkflowUndoPoint(
+        replay.index
+      );
+
       replay.phase = 'running_action';
 
       const started =
@@ -1999,22 +2088,6 @@ export const DeckGLHeatmap = ({
       replay.phase = 'completed';
       setIsImportedWorkflowRunning(false);
 
-      undoStackRef.current = [];
-      redoStackRef.current = [];
-      setHistoryVersion(prev => prev + 1);
-
-      const importedActions = replay.actions.map(
-        action => ({
-          ...action,
-          source: 'imported' as const
-        })
-      );
-
-      setWorkflowHistory({
-        actions: importedActions,
-        cursor: importedActions.length
-      });
-
       console.log(
         '🏁 IMPORTED WORKFLOW COMPLETED',
         {
@@ -2038,6 +2111,10 @@ export const DeckGLHeatmap = ({
       if (!nextAction) {
         return;
       }
+
+      saveImportedWorkflowUndoPoint(
+        replay.index
+      );
 
       replay.phase = 'running_action';
 
@@ -2260,10 +2337,36 @@ export const DeckGLHeatmap = ({
   const previousOrder = usePrevious(order);
   tooltipFunction = generateTooltipContent
 
+  const hasRowMetadata =
+    Object.keys(data?.cat_colors?.row ?? {}).length > 0;
+
+  const hasColMetadata =
+    Object.keys(data?.cat_colors?.col ?? {}).length > 0;
+
+  let sourceFeatureAxis: 'row' | 'col' | null = null;
+
+  if (hasColMetadata && !hasRowMetadata) {
+    sourceFeatureAxis = 'row';
+  } else if (hasRowMetadata && !hasColMetadata) {
+    sourceFeatureAxis = 'col';
+  } else if (!hasRowMetadata && !hasColMetadata) {
+    // Preserve existing behavior for matrices without metadata.
+    sourceFeatureAxis = 'row';
+  }
+
+  const visualFeatureAxis =
+    sourceFeatureAxis === null
+      ? null
+      : matrixOrientation === 'Transposed'
+        ? sourceFeatureAxis === 'row'
+          ? 'col'
+          : 'row'
+        : sourceFeatureAxis;
+
   const clickableClusterId =
-    matrixOrientation === 'Transposed'
-      ? 'col-cluster'
-      : 'row-cluster';
+    visualFeatureAxis === null
+      ? null
+      : `${visualFeatureAxis}-cluster`;
 
 
   const stableOnClick = useMemo(() => ({
@@ -2287,7 +2390,42 @@ export const DeckGLHeatmap = ({
       console.log('🖱️ Row label clicked:', info);
 
       if (
-        matrixOrientation !== 'Transposed' &&
+        sourceFeatureAxis === 'col' &&
+        visualFeatureAxis === 'row' &&
+        info?.index !== undefined &&
+        dataStateRef.current?.rowLabels
+      ) {
+        const colName =
+          dataStateRef.current.rowLabels[info.index]?.text;
+
+        if (colName) {
+          const currentOrder = orderRef.current;
+
+          const willChange =
+            currentOrder.row !== "" ||
+            currentOrder.sortByRowCat !== "" ||
+            currentOrder.sortRowsByColName !== colName;
+
+          if (willChange) {
+            saveUndoPointRef.current();
+
+            pendingGuiExpressionSortWorkflowRef.current = {
+              feature: colName
+            };
+
+            setOrder((prev) => ({
+              ...prev,
+              row: "",
+              sortByRowCat: "",
+              sortRowsByColName: colName
+            }));
+          }
+        }
+      }
+
+      if (
+        sourceFeatureAxis === 'row' &&
+        visualFeatureAxis === 'row' &&
         info?.index !== undefined &&
         dataStateRef.current?.rowLabels
       ) {
@@ -2335,10 +2473,44 @@ export const DeckGLHeatmap = ({
       onClick?.rowLabel?.(info, event);
     },
     columnLabel: (info: any, event: any) => {
+      if (
+        sourceFeatureAxis === 'col' &&
+        visualFeatureAxis === 'col' &&
+        info?.index !== undefined &&
+        dataStateRef.current?.colLabels
+      ) {
+        const colName =
+          dataStateRef.current.colLabels[info.index]?.text;
+
+        if (colName) {
+          const currentOrder = orderRef.current;
+
+          const willChange =
+            currentOrder.row !== "" ||
+            currentOrder.sortByRowCat !== "" ||
+            currentOrder.sortRowsByColName !== colName;
+
+          if (willChange) {
+            saveUndoPointRef.current();
+
+            pendingGuiExpressionSortWorkflowRef.current = {
+              feature: colName
+            };
+
+            setOrder((prev) => ({
+              ...prev,
+              row: "",
+              sortByRowCat: "",
+              sortRowsByColName: colName
+            }));
+          }
+        }
+      }
       // In Transposed view, visible column labels are original row features.
       // Clicking one should sort the original columns/samples by that feature.
       if (
-        matrixOrientation === 'Transposed' &&
+        sourceFeatureAxis === 'row' &&
+        visualFeatureAxis === 'col' &&
         info?.index !== undefined &&
         dataStateRef.current?.colLabels
       ) {
@@ -2372,7 +2544,14 @@ export const DeckGLHeatmap = ({
 
       onClick?.columnLabel?.(info, event);
     },
-  }), [onClick, filters, matrixOrientation]); // This now correctly depends on the prop from the parent and filters.
+  }), [
+    onClick,
+    filters,
+    matrixOrientation,
+    sourceFeatureAxis,
+    visualFeatureAxis,
+    clickableClusterId
+  ]);
 
 
 
@@ -2704,18 +2883,33 @@ export const DeckGLHeatmap = ({
         });
       }
 
+
       if (action === 'sort_by_expression') {
-        recordWorkflowAction({
-          type: 'sort_by_expression',
-          source: 'nl',
-          label:
-            `Sort Columns by ${value} expression`,
-          target: workflowTarget ?? 'columns',
-          parameters: {
-            feature: value
-          }
-        });
+        const expressionSortTarget =
+          sourceFeatureAxis === 'col'
+            ? 'rows'
+            : sourceFeatureAxis === 'row'
+              ? 'columns'
+              : null;
+
+        if (expressionSortTarget) {
+          const targetLabel =
+            expressionSortTarget === 'rows'
+              ? 'Rows'
+              : 'Columns';
+
+          recordWorkflowAction({
+            type: 'sort_by_expression',
+            source: 'nl',
+            label: `Sort ${targetLabel} by ${value} expression`,
+            target: expressionSortTarget,
+            parameters: {
+              feature: value
+            }
+          });
+        }
       }
+
 
       if (
         action === 'sample_filter' ||
@@ -2933,7 +3127,8 @@ export const DeckGLHeatmap = ({
                 : 'alphabetically',
             sortByRowCat: "",
             sortByColCat: "",
-            sortColsByRowName: null
+            sortColsByRowName: null,
+            sortRowsByColName: null
           }));
 
           // Build notification message based on action type
@@ -2980,24 +3175,30 @@ export const DeckGLHeatmap = ({
         } else if (action === "sort" || action === "cluster") {
           // The existing notifySortStarted/notifyClusteringStarted will be called
           // automatically when the setOrder state change is detected.
+
           if (target === "rows") {
             setOrder((prev) => ({
               ...prev,
               row: value || 'cluster',
               sortByRowCat: "",
-              sortColsByRowName: null  // Clear gene-based column sorting
+              sortRowsByColName: null
             }));
           } else if (target === "columns" || target === "cols") {
-            setOrder((prev) => ({ ...prev, col: value || 'cluster', sortByColCat: "", sortColsByRowName: null }));
+            setOrder((prev) => ({
+              ...prev,
+              col: value || 'cluster',
+              sortByColCat: "",
+              sortColsByRowName: null
+            }));
           } else if (target === "both") {
-            // Handle compound command - cluster both rows and columns
             setOrder((prev) => ({
               ...prev,
               row: value || 'cluster',
               col: value || 'cluster',
               sortByRowCat: "",
               sortByColCat: "",
-              sortColsByRowName: null
+              sortColsByRowName: null,
+              sortRowsByColName: null
             }));
           }
         } else if (action === "sort_by_meta") {
@@ -3006,25 +3207,37 @@ export const DeckGLHeatmap = ({
               ...prev,
               row: "",
               sortByRowCat: value,
-              sortColsByRowName: null  // Clear gene-based column sorting
+              sortRowsByColName: null
             }));
           } else if (target === "columns" || target === "cols") {
-            setOrder((prev) => ({ ...prev, col: "", sortByColCat: value, sortColsByRowName: null }));
+            setOrder((prev) => ({
+              ...prev,
+              col: "",
+              sortByColCat: value,
+              sortColsByRowName: null
+            }));
           }
+
         } else if (action === "sort_by_expression") {
-          // Sort columns by a specific gene's expression values
-          setOrder((prev) => ({
-            ...prev,
-            col: "",              // Clear standard column sorting
-            sortByColCat: "",     // Clear category-based column sorting
-            sortColsByRowName: value  // value is the gene name (e.g., "FASLG")
-          }));
-          // addNotification({
-          //   type: 'info',
-          //   title: 'Sorting by Expression',
-          //   message: `Sorting columns by ${value} expression values`,
-          //   duration: 3000,
-          // });
+          if (sourceFeatureAxis === 'col') {
+            // Features are physical columns:
+            // sort physical rows by this feature's values.
+            setOrder((prev) => ({
+              ...prev,
+              row: "",
+              sortByRowCat: "",
+              sortRowsByColName: value
+            }));
+          } else if (sourceFeatureAxis === 'row') {
+            // Features are physical rows:
+            // sort physical columns by this feature's values.
+            setOrder((prev) => ({
+              ...prev,
+              col: "",
+              sortByColCat: "",
+              sortColsByRowName: value
+            }));
+          }
         } else if (action === "set_opacity") {
           // Parse the opacity value from the command
           let newOpacityValue = OpacityValue; // Start with current value
@@ -3907,18 +4120,8 @@ export const DeckGLHeatmap = ({
             currentImportedAction?.type === 'crop' ||
             currentImportedAction?.type === 'clear_crop'
           ) {
-            importedReplay.index += 1;
-            importedReplay.phase =
-              'ready_for_next_action';
-
-            console.log(
-              '✅ IMPORTED ACTION COMPLETED',
+            completeImportedWorkflowAction(
               currentImportedAction
-            );
-
-            console.log(
-              '⏭️ NEXT IMPORTED ACTION INDEX',
-              importedReplay.index
             );
           }
         }
@@ -4005,7 +4208,8 @@ export const DeckGLHeatmap = ({
                 (
                   order.row !== previousOrder.row ||
                   order.sortByRowCat !== previousOrder.sortByRowCat ||
-                  order.sortColsByRowName !== previousOrder.sortColsByRowName
+                  order.sortColsByRowName !== previousOrder.sortColsByRowName ||
+                  order.sortRowsByColName !== previousOrder.sortRowsByColName
                 )
               )
               : (
@@ -4013,7 +4217,8 @@ export const DeckGLHeatmap = ({
                 (
                   order.col !== previousOrder.col ||
                   order.sortByColCat !== previousOrder.sortByColCat ||
-                  order.sortColsByRowName !== previousOrder.sortColsByRowName
+                  order.sortColsByRowName !== previousOrder.sortColsByRowName ||
+                  order.sortRowsByColName !== previousOrder.sortRowsByColName
                 )
               );
 
@@ -4048,7 +4253,7 @@ export const DeckGLHeatmap = ({
                 (
                   order.row !== previousOrder.row ||
                   order.sortByRowCat !== previousOrder.sortByRowCat ||
-                  order.sortColsByRowName !== previousOrder.sortColsByRowName
+                  order.sortRowsByColName !== previousOrder.sortRowsByColName
                 )
               )
               : (
@@ -4059,6 +4264,7 @@ export const DeckGLHeatmap = ({
                   order.sortColsByRowName !== previousOrder.sortColsByRowName
                 )
               );
+
 
           if (sortChangeSucceeded) {
             pendingGuiSortWorkflowRef.current = null;
@@ -4084,13 +4290,14 @@ export const DeckGLHeatmap = ({
           pendingGuiMetadataSortWorkflowRef.current;
 
         if (pendingMetadataSort) {
+
           const metadataSortChangeSucceeded =
             pendingMetadataSort.target === 'rows'
               ? (
                 order.sortByRowCat === pendingMetadataSort.field &&
                 (
                   order.sortByRowCat !== previousOrder.sortByRowCat ||
-                  order.sortColsByRowName !== previousOrder.sortColsByRowName
+                  order.sortRowsByColName !== previousOrder.sortRowsByColName
                 )
               )
               : (
@@ -4100,6 +4307,7 @@ export const DeckGLHeatmap = ({
                   order.sortColsByRowName !== previousOrder.sortColsByRowName
                 )
               );
+
 
           if (metadataSortChangeSucceeded) {
             pendingGuiMetadataSortWorkflowRef.current = null;
@@ -4126,22 +4334,43 @@ export const DeckGLHeatmap = ({
 
         if (pendingExpressionSort) {
           const expressionSortChangeSucceeded =
-            order.sortColsByRowName === pendingExpressionSort.feature &&
-            (
-              order.sortColsByRowName !== previousOrder.sortColsByRowName ||
-              order.col !== previousOrder.col ||
-              order.sortByColCat !== previousOrder.sortByColCat
-            );
+            sourceFeatureAxis === 'col'
+              ? (
+                order.sortRowsByColName === pendingExpressionSort.feature &&
+                (
+                  order.sortRowsByColName !== previousOrder.sortRowsByColName ||
+                  order.row !== previousOrder.row ||
+                  order.sortByRowCat !== previousOrder.sortByRowCat
+                )
+              )
+              : (
+                order.sortColsByRowName === pendingExpressionSort.feature &&
+                (
+                  order.sortColsByRowName !== previousOrder.sortColsByRowName ||
+                  order.col !== previousOrder.col ||
+                  order.sortByColCat !== previousOrder.sortByColCat
+                )
+              );
 
           if (expressionSortChangeSucceeded) {
             pendingGuiExpressionSortWorkflowRef.current = null;
+
+            const expressionSortTarget =
+              sourceFeatureAxis === 'col'
+                ? 'rows'
+                : 'columns';
+
+            const expressionSortTargetLabel =
+              sourceFeatureAxis === 'col'
+                ? 'Rows'
+                : 'Columns';
 
             recordWorkflowAction({
               type: 'sort_by_expression',
               source: 'gui',
               label:
-                `Sort Columns by ${pendingExpressionSort.feature} expression`,
-              target: 'columns',
+                `Sort ${expressionSortTargetLabel} by ${pendingExpressionSort.feature} expression`,
+              target: expressionSortTarget,
               parameters: {
                 feature: pendingExpressionSort.feature
               }
@@ -4233,7 +4462,7 @@ export const DeckGLHeatmap = ({
     heatmapStateRef.current,
     labels,
     container,
-    order,
+    visualOrder,
     ID,
     datastateVersion,
     heatmapstateVersion,
@@ -4282,7 +4511,11 @@ export const DeckGLHeatmap = ({
 
             const willChange =
               currentField !== catName ||
-              order.sortColsByRowName !== null;
+              (
+                target === 'rows'
+                  ? order.sortRowsByColName !== null
+                  : order.sortColsByRowName !== null
+              );
 
             if (!willChange) return;
 
@@ -4297,7 +4530,7 @@ export const DeckGLHeatmap = ({
               setOrder((prevOrder: any) => ({
                 ...prevOrder,
                 sortByRowCat: catName,
-                sortColsByRowName: null
+                sortRowsByColName: null
               }));
             } else {
               setOrder((prevOrder: any) => ({
@@ -4360,7 +4593,11 @@ export const DeckGLHeatmap = ({
 
             const willChange =
               currentField !== cat ||
-              order.sortColsByRowName !== null;
+              (
+                target === 'rows'
+                  ? order.sortRowsByColName !== null
+                  : order.sortColsByRowName !== null
+              );
 
             if (!willChange) return;
 
@@ -4381,7 +4618,7 @@ export const DeckGLHeatmap = ({
               setOrder(prev => ({
                 ...prev,
                 sortByRowCat: cat,
-                sortColsByRowName: null
+                sortRowsByColName: null
               }));
             }
           });
@@ -4407,23 +4644,11 @@ export const DeckGLHeatmap = ({
           ((i + 1) * (catH + gap)) +
           catH;
         label.style.left = `${xPos}px`;
-        if (matrixOrientation === 'Transposed') {
-          // Metadata originally belonged to columns and is now displayed vertically.
-          // Put its titles above the heatmap.
-          label.style.top = `${colLabelsWidth - 18}px`;
-          label.style.transform = 'rotate(-90deg)';
-          label.style.transformOrigin = 'bottom left';
-        } else {
-          // Preserve existing row-metadata behavior.
-          const yPos =
-            (heatmapStateRef.current?.height || 0) +
-            colLabelsWidth +
-            5;
-
-          label.style.top = `${yPos}px`;
-          label.style.transform = 'rotate(90deg)';
-          label.style.transformOrigin = 'top left';
-        }
+        // Row metadata is displayed vertically regardless of
+        // the matrix's original/transposed orientation.
+        label.style.top = `${colLabelsWidth - 18}px`;
+        label.style.transform = 'rotate(-90deg)';
+        label.style.transformOrigin = 'bottom left';
 
         containerElement.appendChild(label);
       });
@@ -4438,7 +4663,8 @@ export const DeckGLHeatmap = ({
     panelWidth,
     searchTerm, // Add the search term parameter
     colLabelsWidth, // Add the column labels width parameter
-    null // Data is already cropped by computeDataState, pan constraints use dataState dimensions
+    null, // Data is already cropped by computeDataState, pan constraints use dataState dimensions
+    visualFeatureAxis
   );
 
   // Reset function - clears crop and resets view to show full heatmap
@@ -4548,10 +4774,18 @@ export const DeckGLHeatmap = ({
       rowLabelsTitle,
       columnLabelsTitle,
       searchTerm,
+      featureAxis: visualFeatureAxis,
       order: visualOrder,
       categories: categories, // Assuming `categories` is stable or correctly memoized
-      rowSliderVal: rowClustGroup,
-      colSliderVal: colClustGroup,
+      rowSliderVal:
+        matrixOrientation === 'Transposed'
+          ? colClustGroup
+          : rowClustGroup,
+
+      colSliderVal:
+        matrixOrientation === 'Transposed'
+          ? rowClustGroup
+          : colClustGroup,
       opacityVal: OpacityValue,
       pvalThreshold: 0.05, // Example pvalThreshold
       pvalData,
@@ -4576,6 +4810,7 @@ export const DeckGLHeatmap = ({
     rowLabelsWidth,
     searchTerm,
     visualOrder,
+    matrixOrientation,
     rowClustGroup,
     colClustGroup,
     OpacityValue,
@@ -5303,6 +5538,7 @@ export const DeckGLHeatmap = ({
           setOrder={setOrder}
           categories={catTemporary}
           colMetadataValues={colMetadataValues}
+          rowMetadataValues={rowMetadataValues}
           order={order}
           //Legend={legendComponent}
           panelWidth={panelWidth}
@@ -5311,7 +5547,11 @@ export const DeckGLHeatmap = ({
           workflowBaselineRowCount={data?.row_nodes?.length}
           workflowBaselineColumnCount={data?.col_nodes?.length}
           workflowBaselineRowFeatures={
-            data?.row_nodes?.map((node: any) => node.name) ?? []
+            sourceFeatureAxis === 'row'
+              ? data?.row_nodes?.map((node: any) => node.name) ?? []
+              : sourceFeatureAxis === 'col'
+                ? data?.col_nodes?.map((node: any) => node.name) ?? []
+                : []
           }
           workflowBaselineColMetadataValues={
             workflowBaselineColMetadataValues
@@ -5358,6 +5598,7 @@ export const DeckGLHeatmap = ({
           onReZscoreToggle={handleReZscoreToggle}
           onZScoreAxisChange={handleZScoreAxisChange}
           matrixOrientation={matrixOrientation}
+          featureAxis={visualFeatureAxis}
           setMatrixOrientation={setMatrixOrientationWithHistory}
           onAnalysisChangeStart={saveUndoPoint}
           onGuiClusterRequest={handleGuiClusterRequest}

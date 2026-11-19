@@ -142,9 +142,19 @@ const MultiSelect: React.FC<MultiSelectProps> = ({ elements, order, setOrder, ax
       onChange={(_, value) => {
         setSelectedOptions(value);
         if (axis === 'col') {
-          setOrder((prev: any) => ({ ...prev, colCat: value }));
+          setOrder((prev: any) => ({
+            ...prev,
+            colCat: value,
+            sortColsByRowName: null,
+            sortRowsByColName: null
+          }));
         } else {
-          setOrder((prev: any) => ({ ...prev, rowCat: value }));
+          setOrder((prev: any) => ({
+            ...prev,
+            rowCat: value,
+            sortColsByRowName: null,
+            sortRowsByColName: null
+          }));
         }
         onSelectionChange?.(axis, value);
       }}

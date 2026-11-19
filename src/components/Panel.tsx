@@ -347,6 +347,7 @@ export default function PersistentDrawerLeft({
   onColumnClusterDepthInteractionEnd,
   onMetadataSelectionChange,
   matrixOrientation,
+  featureAxis,
   setMatrixOrientation,
   reZscoreFilteredSubset,
   zScoreAxis,
@@ -406,6 +407,7 @@ export default function PersistentDrawerLeft({
   setRowClusterValue: React.Dispatch<React.SetStateAction<number>>;
   setColClusterValue: React.Dispatch<React.SetStateAction<number>>;
   matrixOrientation: string;
+  featureAxis: 'row' | 'col' | null;
   setMatrixOrientation: React.Dispatch<React.SetStateAction<string>>;
   rowClusterValue: number;
   colClusterValue: number;
@@ -756,15 +758,23 @@ export default function PersistentDrawerLeft({
     ? order.row
     : order.col;
 
-  const rowlabels = useMemo(
+  const featureLabels = useMemo(
     () => {
-      if (dataState) {
-        return dataState.rowLabels?.map((ele: { text: string }) => ele.text)
+      if (!dataState || featureAxis === null) {
+        return null;
       }
-      else {
-        return null
-      }
-    }, [dataState?.rowLabels]);
+
+      const labels =
+        featureAxis === 'col'
+          ? dataState.colLabels
+          : dataState.rowLabels;
+
+      return labels?.map(
+        (ele: { text: string }) => ele.text
+      );
+    },
+    [dataState?.rowLabels, dataState?.colLabels, featureAxis]
+  );
 
   const drawerWidth = panelWidth;
   const colCategorynames = Object.keys(categories.col);
@@ -844,22 +854,54 @@ export default function PersistentDrawerLeft({
         };
       });
 
-  const appliedColMetadataFields = new Set(
-    (filters?.col || [])
+  const hasColMetadataValues =
+    Object.keys(colMetadataValues).length > 0;
+
+  const hasRowMetadataValues =
+    Object.keys(rowMetadataValues).length > 0;
+
+  const sampleMetadataSourceAxis: 'row' | 'col' | null =
+    hasColMetadataValues && !hasRowMetadataValues
+      ? 'col'
+      : hasRowMetadataValues && !hasColMetadataValues
+        ? 'row'
+        : !hasColMetadataValues && !hasRowMetadataValues
+          ? 'col'
+          : null;
+
+  const sampleMetadataValues =
+    sampleMetadataSourceAxis === 'row'
+      ? rowMetadataValues
+      : sampleMetadataSourceAxis === 'col'
+        ? colMetadataValues
+        : {};
+
+  const appliedSampleMetadataFields = new Set(
+    (
+      sampleMetadataSourceAxis === 'row'
+        ? filters?.row || []
+        : filters?.col || []
+    )
       .map((filter: any) => filter?.field)
       .filter(Boolean)
       .map((field: string) => field.toLowerCase())
   );
 
   const sampleMetadataDisplayAxis =
-    isTransposed
-      ? 'rows'
-      : 'columns';
+    sampleMetadataSourceAxis === null
+      ? null
+      : isTransposed
+        ? sampleMetadataSourceAxis === 'row'
+          ? 'columns'
+          : 'rows'
+        : sampleMetadataSourceAxis === 'row'
+          ? 'rows'
+          : 'columns';
 
-  const metadataFilterCommands = Object.entries(colMetadataValues)
+  const metadataFilterCommands = Object.entries(sampleMetadataValues)
     .filter(
       ([metadata]) =>
-        !appliedColMetadataFields.has(metadata.toLowerCase())
+        !appliedSampleMetadataFields.has(metadata.toLowerCase())
     )
     .filter(
       ([_, values]) =>
@@ -872,10 +914,10 @@ export default function PersistentDrawerLeft({
     );
 
   const metadataPlaceholderFilterCommands =
-    Object.entries(colMetadataValues)
+    Object.entries(sampleMetadataValues)
       .filter(
         ([metadata]) =>
-          !appliedColMetadataFields.has(metadata.toLowerCase())
+          !appliedSampleMetadataFields.has(metadata.toLowerCase())
       )
       .filter(
         ([_, values]) =>
@@ -887,11 +929,13 @@ export default function PersistentDrawerLeft({
       );
 
   const metadataSortCommands =
-    Object.keys(colMetadataValues)
-      .map(
-        metadata =>
-          `Sort ${sampleMetadataDisplayAxis} by ${metadata}`
-      );
+    sampleMetadataDisplayAxis === null
+      ? []
+      : Object.keys(sampleMetadataValues)
+        .map(
+          metadata =>
+            `Sort ${sampleMetadataDisplayAxis} by ${metadata}`
+        );
 
   const metadataCommandGuide = {
     filtering: [
@@ -961,6 +1005,7 @@ export default function PersistentDrawerLeft({
   const handleRowItemClick = (index: number) => {
     const actionType = orderArray[index];
 
+
     const willChange =
       displayedRowOrder !== actionType ||
       (
@@ -968,7 +1013,12 @@ export default function PersistentDrawerLeft({
           ? order.sortByColCat !== ""
           : order.sortByRowCat !== ""
       ) ||
-      order.sortColsByRowName !== null;
+      (
+        isTransposed
+          ? order.sortColsByRowName !== null
+          : order.sortRowsByColName !== null
+      );
+
 
     if (!willChange) return;
 
@@ -991,6 +1041,7 @@ export default function PersistentDrawerLeft({
 
     setSelectedRowIndex(index);
 
+
     setOrder((prevOrder: any) => {
       if (isTransposed) {
         return {
@@ -1005,13 +1056,15 @@ export default function PersistentDrawerLeft({
         ...prevOrder,
         row: actionType,
         sortByRowCat: "",
-        sortColsByRowName: null
+        sortRowsByColName: null
       };
     });
+
   };
 
   const handleColItemClick = (index: number) => {
     const actionType = orderArray[index];
+
 
     const willChange =
       displayedColOrder !== actionType ||
@@ -1020,7 +1073,12 @@ export default function PersistentDrawerLeft({
           ? order.sortByRowCat !== ""
           : order.sortByColCat !== ""
       ) ||
-      order.sortColsByRowName !== null;
+      (
+        isTransposed
+          ? order.sortRowsByColName !== null
+          : order.sortColsByRowName !== null
+      );
+
 
     if (!willChange) return;
 
@@ -1043,13 +1101,14 @@ export default function PersistentDrawerLeft({
 
     setSelectedColIndex(index);
 
+
     setOrder((prevOrder: any) => {
       if (isTransposed) {
         return {
           ...prevOrder,
           row: actionType,
           sortByRowCat: "",
-          sortColsByRowName: null
+          sortRowsByColName: null
         };
       }
 
@@ -1660,7 +1719,12 @@ export default function PersistentDrawerLeft({
 
             </div>
           )}
-        {rowlabels && <SearchBox elements={rowlabels} setSearchTerm={setSearchTerm} />}
+        {featureLabels && (
+          <SearchBox
+            elements={featureLabels}
+            setSearchTerm={setSearchTerm}
+          />
+        )}
         <div style={{ marginLeft: '10px', marginRight: '10px', marginTop: '4px', marginBottom: '4px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
           <h3 style={sidebarSectionLabelStyle}>
             Opacity Slider

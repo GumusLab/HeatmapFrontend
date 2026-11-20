@@ -358,7 +358,11 @@ export const getLayers = ({
 
         for (let i = 0; i < validColCats.length; i++) {
           const initialGap = INITIAL_GAP;
-          const yPosition = halfViewHeight - initialGap - clusterOffset - ((i + 1) * (categoryHeight + gap));
+          const yPosition =
+            halfViewHeight -
+            initialGap -
+            clusterOffset -
+            ((i + 1) * (categoryHeight + gap));
 
           const catLayer = getCatLabelsLayer(
             dataState,
@@ -403,7 +407,11 @@ export const getLayers = ({
         // - Subtract initialGap to move right from the very left
         // - Subtract clusterOffset to make room for cluster layer
         // - Subtract width and gap for each previous layer
-        const xPosition = halfViewWidth - initialGap - clusterOffset - ((i + 1) * (categoryHeight + gap));
+        const xPosition =
+          halfViewWidth -
+          initialGap -
+          clusterOffset -
+          ((i + 1) * (categoryHeight + gap));
 
         const catLayer = getCatLabelsLayer(
           dataState,

@@ -100,6 +100,7 @@ import {
   MIN_LABEL_CHARS,
   CATEGORY_LAYER_HEIGHT,
   LAYER_GAP,
+  INITIAL_GAP,
   CLUSTER_LAYER_HEIGHT,
   CLUSTER_LAYER_GAP,
   MAX_CATEGORIES,
@@ -172,19 +173,54 @@ export const useLabelState = (
             ? CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP
             : 0;
 
-        const fixedTopClearance =
-          order.colCat.length === 0
+        // Match the actual metadata heading font in DeckGLHeatmap.tsx.
+        const metadataHeadingFontSize = 10;
+        const metadataHeadingFont =
+          `bold ${metadataHeadingFontSize}px ${fontFamily}`;
+
+        const tiltRadians = Math.PI / 3; // 60 degrees
+
+        // Measure the vertical space occupied by tilted column names.
+        const actualColumnLabelWidth = Math.max(
+          0,
+          baseColumnLabelWidth +
+          (labels?.column?.offset || DEFAULT_LABEL_OFFSET)
+        );
+
+        const columnNameClearance =
+          actualColumnLabelWidth * Math.sin(Math.PI / 3) +
+          columnFontSize * Math.cos(Math.PI / 3) +
+          20;
+
+        // Measure the actual bold, tilted row metadata headings.
+        const rowMetadataHeadingClearance =
+          order.rowCat.length > 0
             ? Math.max(
-              baseColumnLabelWidth,
-              (matrixInfoHeight + 8) * 2.5
-            )
-            : Math.max(
-              baseColumnLabelWidth,
-              matrixInfoHeight + 6
-            );
+              ...order.rowCat.map(cat =>
+                getTextWidth(cat, metadataHeadingFont) *
+                Math.sin(tiltRadians) +
+                metadataHeadingFontSize *
+                Math.cos(tiltRadians)
+              )
+            ) + 12
+            : 0;
+
+        // Reserve the largest required clearance, not their sum.
+        const labelClearance = Math.max(
+          columnNameClearance,
+          rowMetadataHeadingClearance
+        );
+
+        const legendClearance =
+          matrixInfoHeight > 0
+            ? matrixInfoHeight + 8
+            : 0;
+
+        const headerClearance =
+          labelClearance + legendClearance;
 
         col =
-          fixedTopClearance +
+          headerClearance +
           metadataStackHeight +
           clusterStackHeight;
         /*
@@ -192,16 +228,59 @@ export const useLabelState = (
           So From deckgl docs 1common Unit = 2**Zoom*Pixel
          */
 
-        row =
-          Math.max(
-            ...dataState.rowLabels.map((l) =>
-              getTextWidth(
-                l.text.slice(0, (labels?.row?.maxChars || MIN_LABEL_CHARS) + 3), // add 3 for ellipsis when truncating
-                rowFont
+        const baseRowLabelWidth =
+          dataState.rowLabels.length > 0
+            ? Math.max(
+              ...dataState.rowLabels.map((l) =>
+                getTextWidth(
+                  l.text.slice(
+                    0,
+                    (labels?.row?.maxChars || MIN_LABEL_CHARS) + 3
+                  ),
+                  rowFont
+                )
               )
             )
-          )
-        // - (labels?.row?.offset || DEFAULT_LABEL_OFFSET);
+            : 0;
+
+        // Display variable names on the axis with fewer
+        // selected metadata tracks.
+        const rowSelectedCount = order.rowCat.length;
+        const colSelectedCount = order.colCat.length;
+
+        const showRowNames =
+          rowSelectedCount < colSelectedCount;
+
+        const rowMetadataWidth =
+          order.rowCat.length > 0
+            ? order.rowCat.length *
+            (CATEGORY_LAYER_HEIGHT + LAYER_GAP) +
+            INITIAL_GAP
+            : 0;
+
+        const rowClusterWidth =
+          order.row === 'cluster'
+            ? CLUSTER_LAYER_HEIGHT +
+            CLUSTER_LAYER_GAP +
+            INITIAL_GAP
+            : 0;
+
+        const columnMetadataHeadingWidth =
+          order.colCat.length > 0
+            ? Math.max(
+              ...order.colCat.map(cat =>
+                getTextWidth(cat, metadataHeadingFont)
+              )
+            ) + 8
+            : 0;
+
+        row =
+          Math.max(
+            baseRowLabelWidth,
+            columnMetadataHeadingWidth
+          ) +
+          rowMetadataWidth +
+          rowClusterWidth;
       }
     }
     setLabelsState({
@@ -217,6 +296,9 @@ export const useLabelState = (
     labels?.row,
     order.colCat.length,
     order.col,
+    order.rowCat.length,
+    order.row,
+    order.rowCat,
     matrixInfoHeight,
     ID,
     datastateVersion,

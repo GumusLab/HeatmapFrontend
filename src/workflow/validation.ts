@@ -48,6 +48,7 @@ export interface WorkflowDatasetContext {
     columnMetadataValues: Record<string, string[]>;
     rowMetadataValues: Record<string, string[]>;
     rowFeatures: string[];
+    columnFeatures: string[];
     rowCount?: number;
     columnCount?: number;
 }
@@ -409,45 +410,18 @@ export const validateWorkflowActionAgainstDataset = (
         const feature = action.parameters.feature;
 
 
-        const hasRowMetadata = context.rowMetadataFields.length > 0;
-        const hasColMetadata = context.columnMetadataFields.length > 0;
-
-        // Determine which physical axis contains biological features.
-        // This follows the current frontend inference convention.
-        const expectedTarget =
-            hasRowMetadata && !hasColMetadata
-                ? 'rows'
-                : hasColMetadata && !hasRowMetadata
-                    ? 'columns'
-                    : !hasRowMetadata && !hasColMetadata
-                        ? 'columns'
-                        : null;
-
-        // Metadata on both axes does not establish biological identity.
-        if (expectedTarget === null) {
+        // Both rows and columns can be sorted by expression.
+        // Use the target explicitly recorded in the workflow.
+        if (action.target !== 'rows' && action.target !== 'columns') {
             return {
                 status: 'needs_resolution',
                 issues: [
                     {
                         code: 'INVALID_PARAMETER',
                         message:
-                            'Cannot determine the expression-sort target because both axes contain metadata. The feature axis must be resolved explicitly.',
-                        parameter: 'target'
-                    }
-                ]
-            };
-        }
-
-        if (action.target !== expectedTarget) {
-            return {
-                status: 'needs_resolution',
-                issues: [
-                    {
-                        code: 'INVALID_PARAMETER',
-                        message:
-                            `Expression sorting must target ${expectedTarget} for this dataset.`,
+                            'Expression sorting requires a valid target axis.',
                         parameter: 'target',
-                        availableValues: [expectedTarget]
+                        availableValues: ['rows', 'columns']
                     }
                 ]
             };
@@ -470,7 +444,12 @@ export const validateWorkflowActionAgainstDataset = (
             };
         }
 
-        if (!context.rowFeatures.includes(feature)) {
+        const availableFeatures =
+            action.target === 'rows'
+                ? context.columnFeatures
+                : context.rowFeatures;
+
+        if (!availableFeatures.includes(feature)) {
             return {
                 status: 'needs_resolution',
                 issues: [
@@ -479,7 +458,7 @@ export const validateWorkflowActionAgainstDataset = (
                         message:
                             `Feature "${feature}" is not available in the current dataset.`,
                         parameter: 'feature',
-                        availableValues: context.rowFeatures
+                        availableValues: availableFeatures
                     }
                 ]
             };

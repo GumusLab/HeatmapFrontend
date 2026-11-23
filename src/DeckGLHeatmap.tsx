@@ -317,6 +317,7 @@ export const DeckGLHeatmap = ({
 
   const pendingGuiExpressionSortWorkflowRef = useRef<{
     feature: string;
+    target: 'rows' | 'columns';
   } | null>(null);
 
   const pendingGuiClearFiltersWorkflowRef = useRef(false);
@@ -2410,7 +2411,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: colName
+              feature: colName,
+              target: 'rows'
             };
 
             setOrder((prev) => ({
@@ -2446,7 +2448,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: rowName
+              feature: rowName,
+              target: 'columns'
             };
 
             console.log(
@@ -2494,7 +2497,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: colName
+              feature: colName,
+              target: 'rows'
             };
 
             setOrder((prev) => ({
@@ -2529,7 +2533,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: rowName
+              feature: rowName,
+              target: 'columns'
             };
 
             setOrder((prev) => ({
@@ -4333,10 +4338,12 @@ export const DeckGLHeatmap = ({
           pendingGuiExpressionSortWorkflowRef.current;
 
         if (pendingExpressionSort) {
+          const { feature, target } = pendingExpressionSort;
+
           const expressionSortChangeSucceeded =
-            sourceFeatureAxis === 'col'
+            target === 'rows'
               ? (
-                order.sortRowsByColName === pendingExpressionSort.feature &&
+                order.sortRowsByColName === feature &&
                 (
                   order.sortRowsByColName !== previousOrder.sortRowsByColName ||
                   order.row !== previousOrder.row ||
@@ -4344,7 +4351,7 @@ export const DeckGLHeatmap = ({
                 )
               )
               : (
-                order.sortColsByRowName === pendingExpressionSort.feature &&
+                order.sortColsByRowName === feature &&
                 (
                   order.sortColsByRowName !== previousOrder.sortColsByRowName ||
                   order.col !== previousOrder.col ||
@@ -4355,24 +4362,16 @@ export const DeckGLHeatmap = ({
           if (expressionSortChangeSucceeded) {
             pendingGuiExpressionSortWorkflowRef.current = null;
 
-            const expressionSortTarget =
-              sourceFeatureAxis === 'col'
-                ? 'rows'
-                : 'columns';
-
-            const expressionSortTargetLabel =
-              sourceFeatureAxis === 'col'
-                ? 'Rows'
-                : 'Columns';
+            const targetLabel =
+              target === 'rows' ? 'Rows' : 'Columns';
 
             recordWorkflowAction({
               type: 'sort_by_expression',
               source: 'gui',
-              label:
-                `Sort ${expressionSortTargetLabel} by ${pendingExpressionSort.feature} expression`,
-              target: expressionSortTarget,
+              label: `Sort ${targetLabel} by ${feature} expression`,
+              target,
               parameters: {
-                feature: pendingExpressionSort.feature
+                feature
               }
             });
           }
@@ -5657,11 +5656,10 @@ export const DeckGLHeatmap = ({
           workflowBaselineRowCount={data?.row_nodes?.length}
           workflowBaselineColumnCount={data?.col_nodes?.length}
           workflowBaselineRowFeatures={
-            sourceFeatureAxis === 'row'
-              ? data?.row_nodes?.map((node: any) => node.name) ?? []
-              : sourceFeatureAxis === 'col'
-                ? data?.col_nodes?.map((node: any) => node.name) ?? []
-                : []
+            data?.row_nodes?.map((node: any) => node.name) ?? []
+          }
+          workflowBaselineColumnFeatures={
+            data?.col_nodes?.map((node: any) => node.name) ?? []
           }
           workflowBaselineColMetadataValues={
             workflowBaselineColMetadataValues

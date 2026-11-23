@@ -9,7 +9,7 @@ import ClusterInfoBox from './components/HoverTable';
 import Legend2 from './components/Legend2';
 import PersistentDrawerLeft from './components/Panel';
 //import CustomSlider from './components/Slider';
-import { DEFAULT_LABEL_OFFSET, MAX_CATEGORIES, OPACITY, HEATMAP_PARENT_HEIGHT_RATIO, HEATMAP_PARENT_WIDTH_RATIO, HEATMAP_WIDTH, HEATMAP_HEIGHT, IDS, BASE_ZOOM, INITIAL_GAP, LAYER_GAP } from './const';
+import { DEFAULT_LABEL_OFFSET, MAX_CATEGORIES, OPACITY, HEATMAP_PARENT_HEIGHT_RATIO, HEATMAP_PARENT_WIDTH_RATIO, HEATMAP_WIDTH, HEATMAP_HEIGHT, IDS, BASE_ZOOM, INITIAL_GAP, LAYER_GAP, DEFAULT_LABEL_MAX_SIZE, MIN_LABEL_CHARS } from './const';
 import { layerFilter } from './layerFilter';
 import { getLayers } from './layers/getLayers';
 import { useDimensions } from './state/useDimensions';
@@ -317,6 +317,7 @@ export const DeckGLHeatmap = ({
 
   const pendingGuiExpressionSortWorkflowRef = useRef<{
     feature: string;
+    target: 'rows' | 'columns';
   } | null>(null);
 
   const pendingGuiClearFiltersWorkflowRef = useRef(false);
@@ -2390,9 +2391,9 @@ export const DeckGLHeatmap = ({
       console.log('🖱️ Row label clicked:', info);
 
       if (
-        sourceFeatureAxis === 'col' &&
-        visualFeatureAxis === 'row' &&
+        matrixOrientation === 'Transposed' &&
         info?.index !== undefined &&
+        info.index >= 0 &&
         dataStateRef.current?.rowLabels
       ) {
         const colName =
@@ -2410,7 +2411,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: colName
+              feature: colName,
+              target: 'rows'
             };
 
             setOrder((prev) => ({
@@ -2424,9 +2426,9 @@ export const DeckGLHeatmap = ({
       }
 
       if (
-        sourceFeatureAxis === 'row' &&
-        visualFeatureAxis === 'row' &&
+        matrixOrientation !== 'Transposed' &&
         info?.index !== undefined &&
+        info.index >= 0 &&
         dataStateRef.current?.rowLabels
       ) {
         const rowName =
@@ -2446,7 +2448,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: rowName
+              feature: rowName,
+              target: 'columns'
             };
 
             console.log(
@@ -2474,9 +2477,9 @@ export const DeckGLHeatmap = ({
     },
     columnLabel: (info: any, event: any) => {
       if (
-        sourceFeatureAxis === 'col' &&
-        visualFeatureAxis === 'col' &&
+        matrixOrientation !== 'Transposed' &&
         info?.index !== undefined &&
+        info.index >= 0 &&
         dataStateRef.current?.colLabels
       ) {
         const colName =
@@ -2494,7 +2497,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: colName
+              feature: colName,
+              target: 'rows'
             };
 
             setOrder((prev) => ({
@@ -2509,9 +2513,9 @@ export const DeckGLHeatmap = ({
       // In Transposed view, visible column labels are original row features.
       // Clicking one should sort the original columns/samples by that feature.
       if (
-        sourceFeatureAxis === 'row' &&
-        visualFeatureAxis === 'col' &&
+        matrixOrientation === 'Transposed' &&
         info?.index !== undefined &&
+        info.index >= 0 &&
         dataStateRef.current?.colLabels
       ) {
         const rowName =
@@ -2529,7 +2533,8 @@ export const DeckGLHeatmap = ({
             saveUndoPointRef.current();
 
             pendingGuiExpressionSortWorkflowRef.current = {
-              feature: rowName
+              feature: rowName,
+              target: 'columns'
             };
 
             setOrder((prev) => ({
@@ -4333,10 +4338,12 @@ export const DeckGLHeatmap = ({
           pendingGuiExpressionSortWorkflowRef.current;
 
         if (pendingExpressionSort) {
+          const { feature, target } = pendingExpressionSort;
+
           const expressionSortChangeSucceeded =
-            sourceFeatureAxis === 'col'
+            target === 'rows'
               ? (
-                order.sortRowsByColName === pendingExpressionSort.feature &&
+                order.sortRowsByColName === feature &&
                 (
                   order.sortRowsByColName !== previousOrder.sortRowsByColName ||
                   order.row !== previousOrder.row ||
@@ -4344,7 +4351,7 @@ export const DeckGLHeatmap = ({
                 )
               )
               : (
-                order.sortColsByRowName === pendingExpressionSort.feature &&
+                order.sortColsByRowName === feature &&
                 (
                   order.sortColsByRowName !== previousOrder.sortColsByRowName ||
                   order.col !== previousOrder.col ||
@@ -4355,24 +4362,16 @@ export const DeckGLHeatmap = ({
           if (expressionSortChangeSucceeded) {
             pendingGuiExpressionSortWorkflowRef.current = null;
 
-            const expressionSortTarget =
-              sourceFeatureAxis === 'col'
-                ? 'rows'
-                : 'columns';
-
-            const expressionSortTargetLabel =
-              sourceFeatureAxis === 'col'
-                ? 'Rows'
-                : 'Columns';
+            const targetLabel =
+              target === 'rows' ? 'Rows' : 'Columns';
 
             recordWorkflowAction({
               type: 'sort_by_expression',
               source: 'gui',
-              label:
-                `Sort ${expressionSortTargetLabel} by ${pendingExpressionSort.feature} expression`,
-              target: expressionSortTarget,
+              label: `Sort ${targetLabel} by ${feature} expression`,
+              target,
               parameters: {
-                feature: pendingExpressionSort.feature
+                feature
               }
             });
           }
@@ -4456,11 +4455,24 @@ export const DeckGLHeatmap = ({
   // ✅ END: of the worker management block.
   // ====================================================================
 
+  const displayedLabels = useMemo(() => ({
+    ...labels,
+    column: {
+      ...labels?.column,
+      maxChars:
+        matrixOrientation === 'Transposed'
+          ? labels?.column?.maxChars
+          : Math.max(
+            labels?.column?.maxChars ?? MIN_LABEL_CHARS,
+            12
+          ),
+    },
+  }), [labels, matrixOrientation]);
 
   useLabelState(
     dataStateRef.current,
     heatmapStateRef.current,
-    labels,
+    displayedLabels,
     container,
     visualOrder,
     ID,
@@ -4470,12 +4482,12 @@ export const DeckGLHeatmap = ({
     setLabelsState
   );
 
-
-
   // Category label DOM — only rebuild when order/layout actually changes, not on every zoom frame
   useEffect(() => {
     if (!container) return;
     const containerElement = container as HTMLDivElement;
+
+    const metadataHeadingFontSize = 10;
 
     // --- Column category labels ---
     if (visualOrder.colCat.length >= 0 && rowLabelsWidth > 0 && colLabelsWidth > 0) {
@@ -4541,16 +4553,57 @@ export const DeckGLHeatmap = ({
             }
           });
         }
-        const offset = labels?.row?.offset ? labels.row.offset : DEFAULT_LABEL_OFFSET + 2;
-        label.style.fontSize = `${CATEGORY_LAYER_HEIGHT}px`;
+        const fullName = label.textContent || '';
+        const fontSize = metadataHeadingFontSize;
+
+        label.textContent = fullName;
+        label.title = fullName;
+
+        label.title = fullName;
+        label.style.fontSize = `${fontSize}px`;
+        label.style.lineHeight = `${fontSize}px`;
         label.style.fontFamily = 'Arial, sans-serif';
         label.style.fontWeight = 'bold';
-        const labelFont = `normal ${label.style.fontSize} ${label.style.fontFamily}`;
-        const width = getTextWidth(label.textContent, labelFont);
-        label.style.width = `${width}px`;
+        label.style.whiteSpace = 'nowrap';
+        label.style.overflow = 'hidden';
+        label.style.textOverflow = 'ellipsis';
         label.style.color = '#333333';
         label.style.textAlign = 'right';
-        label.style.left = isDrawerOpen ? `${panelWidth + rowLabelsWidth - width - offset}px` : `${rowLabelsWidth - width - offset}px`;
+
+        const labelFont = `bold ${fontSize}px Arial, sans-serif`;
+        const rowTrackWidth =
+          visualOrder.rowCat.length *
+          (CATEGORY_LAYER_HEIGHT + LAYER_GAP) +
+          (visualOrder.row === 'cluster'
+            ? CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP
+            : 0);
+
+        const width = Math.ceil(
+          getTextWidth(fullName, labelFont) + 4
+        );
+
+        label.style.width = `${width}px`;
+
+        // Angle column metadata headings upward.
+        label.style.transform = 'none';
+        label.style.overflow = 'visible';
+        label.style.textOverflow = 'clip';
+        label.style.whiteSpace = 'nowrap';
+
+        label.style.zIndex = '30';
+        label.style.pointerEvents = 'auto';
+        label.style.userSelect = 'none';
+        label.style.cursor =
+          visualOrder.col !== 'cluster' ? 'pointer' : 'default';
+
+        const heatmapLeft =
+          (isDrawerOpen ? panelWidth : 0) + rowLabelsWidth;
+
+        label.style.left =
+          `${heatmapLeft - rowTrackWidth - width - 4}px`;
+        label.style.cursor =
+          visualOrder.col !== 'cluster' ? 'pointer' : 'default';
+
         containerElement.appendChild(label);
       }
     }
@@ -4578,7 +4631,10 @@ export const DeckGLHeatmap = ({
         label.id = labelId;
         label.className = 'row-category-label';
         label.style.position = 'absolute';
-        label.textContent = capitalizeFirstLetter(cat);
+        const fullCategoryName = capitalizeFirstLetter(cat);
+
+        label.title = fullCategoryName;
+        label.textContent = fullCategoryName;
         if (visualOrder.row !== 'cluster') {
           label.addEventListener('click', () => {
             const target =
@@ -4623,19 +4679,25 @@ export const DeckGLHeatmap = ({
             }
           });
         }
-        label.style.fontSize = `${CATEGORY_LAYER_HEIGHT}px`;
+        label.style.fontSize = '7px';
         label.style.fontFamily = 'Arial, sans-serif';
-        label.style.fontWeight = 'bold';
-        const font = `normal ${label.style.fontSize} ${label.style.fontFamily}`;
-        const width = getTextWidth(label.textContent, font);
-        label.style.width = `${width}px`;
+        label.style.fontWeight = 'normal';
         label.style.color = '#333333';
-        label.style.textAlign = 'right';
-        label.style.cursor = visualOrder.row !== 'cluster' ? 'pointer' : 'default';
+        label.style.textAlign = 'center';
+        label.style.whiteSpace = 'nowrap';
+        label.style.lineHeight = '8px';
+        label.style.cursor =
+          visualOrder.row !== 'cluster' ? 'pointer' : 'default';
+
         const gap = LAYER_GAP;
         const catH = CATEGORY_LAYER_HEIGHT;
         const initialGap = INITIAL_GAP;
-        const clusterOffset = visualOrder.row === 'cluster' ? (CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP) : 0;
+
+        const clusterOffset =
+          visualOrder.row === 'cluster'
+            ? CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP
+            : 0;
+
         const xPos =
           (isDrawerOpen ? panelWidth : 0) +
           rowLabelsWidth -
@@ -4643,12 +4705,59 @@ export const DeckGLHeatmap = ({
           clusterOffset -
           ((i + 1) * (catH + gap)) +
           catH;
-        label.style.left = `${xPos}px`;
-        // Row metadata is displayed vertically regardless of
-        // the matrix's original/transposed orientation.
-        label.style.top = `${colLabelsWidth - 18}px`;
-        label.style.transform = 'rotate(-90deg)';
-        label.style.transformOrigin = 'bottom left';
+
+        // Display full metadata names vertically above their tracks.
+        label.style.fontSize = `${metadataHeadingFontSize}px`;
+        label.style.lineHeight = `${metadataHeadingFontSize + 2}px`;
+        label.style.fontFamily = 'Arial, sans-serif';
+        label.style.fontWeight = 'bold';
+        label.style.color = '#333333';
+        label.style.whiteSpace = 'nowrap';
+        label.style.textAlign = 'right';
+
+        const rowHeadingWidth = Math.ceil(
+          getTextWidth(
+            fullCategoryName,
+            `bold ${metadataHeadingFontSize}px Arial, sans-serif`
+          ) + 2
+        );
+
+        const columnMetadataStackHeight =
+          visualOrder.colCat.length *
+          (CATEGORY_LAYER_HEIGHT + LAYER_GAP);
+
+        const columnClusterOffset =
+          visualOrder.col === 'cluster'
+            ? CLUSTER_LAYER_HEIGHT + CLUSTER_LAYER_GAP
+            : 0;
+
+        // Position row headings immediately above the column metadata stack.
+        const headerBaselineY =
+          colLabelsWidth -
+          columnMetadataStackHeight -
+          columnClusterOffset -
+          INITIAL_GAP -
+          4;
+
+        const trackCenterX = xPos - catH / 2;
+
+        label.style.width = `${rowHeadingWidth}px`;
+        label.style.textAlign = 'left';
+        label.style.lineHeight = `${metadataHeadingFontSize + 2}px`;
+
+        // Anchor the beginning of the text at the
+        // center of its corresponding metadata track.
+        label.style.left = `${trackCenterX}px`;
+        label.style.top = `${headerBaselineY - metadataHeadingFontSize - 2
+          }px`;
+        label.style.transform = 'rotate(-60deg)';
+        label.style.transformOrigin = 'left bottom';
+
+        label.style.zIndex = '30';
+        label.style.pointerEvents = 'auto';
+        label.style.userSelect = 'none';
+        label.style.cursor =
+          visualOrder.row !== 'cluster' ? 'pointer' : 'default';
 
         containerElement.appendChild(label);
       });
@@ -4767,7 +4876,7 @@ export const DeckGLHeatmap = ({
       visibleBounds,
       viewStates,
       onClick: stableOnClick, // Use the new stable onClick object
-      labels,
+      labels: displayedLabels,
       debug,
       colLabelsWidth,
       rowLabelsWidth,
@@ -4816,7 +4925,7 @@ export const DeckGLHeatmap = ({
     OpacityValue,
     pvalData,
     isZoomedOut,
-    filteredIdxDict
+    filteredIdxDict,
   ]);
 
 
@@ -5547,11 +5656,10 @@ export const DeckGLHeatmap = ({
           workflowBaselineRowCount={data?.row_nodes?.length}
           workflowBaselineColumnCount={data?.col_nodes?.length}
           workflowBaselineRowFeatures={
-            sourceFeatureAxis === 'row'
-              ? data?.row_nodes?.map((node: any) => node.name) ?? []
-              : sourceFeatureAxis === 'col'
-                ? data?.col_nodes?.map((node: any) => node.name) ?? []
-                : []
+            data?.row_nodes?.map((node: any) => node.name) ?? []
+          }
+          workflowBaselineColumnFeatures={
+            data?.col_nodes?.map((node: any) => node.name) ?? []
           }
           workflowBaselineColMetadataValues={
             workflowBaselineColMetadataValues
@@ -5639,7 +5747,14 @@ export const DeckGLHeatmap = ({
             />
           )}
         />
-        <div style={{ flex: "1 1 0" }}>  {/* This will be a container for the heatmap and whitespace */}
+        <div
+          style={{
+            flex: "1 1 0",
+            minWidth: 0,
+            minHeight: 0,
+            boxSizing: 'border-box'
+          }}
+        >  {/* This will be a container for the heatmap and whitespace */}
           <div id="heatmapDiv" style={{
             height: `${HEATMAP_HEIGHT}%`,
             width: `${HEATMAP_WIDTH}%`,  // Take 95% of the parent container's width
@@ -5659,6 +5774,7 @@ export const DeckGLHeatmap = ({
                 position: 'absolute',
                 top: '4px',
                 left: `${rowLabelsWidth - 10}px`,
+                right: 'auto',
                 zIndex: 20,
 
                 width: legend?.width ?? 228,

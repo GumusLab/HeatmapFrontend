@@ -366,6 +366,7 @@ export default function PersistentDrawerLeft({
   workflowBaselineRowCount,
   workflowBaselineColumnCount,
   workflowBaselineRowFeatures = [],
+  workflowBaselineColumnFeatures = [],
   workflowBaselineColMetadataValues = {},
   workflowBaselineRowMetadataValues = {},
   colMetadataValues = {},
@@ -382,6 +383,7 @@ export default function PersistentDrawerLeft({
   workflowBaselineRowCount?: number;
   workflowBaselineColumnCount?: number;
   workflowBaselineRowFeatures?: string[];
+  workflowBaselineColumnFeatures?: string[];
   workflowBaselineColMetadataValues?: Record<string, string[]>;
   workflowBaselineRowMetadataValues?: Record<string, string[]>;
   order: order;
@@ -712,6 +714,7 @@ export default function PersistentDrawerLeft({
             rowMetadataValues:
               workflowBaselineRowMetadataValues,
             rowFeatures: workflowBaselineRowFeatures,
+            columnFeatures: workflowBaselineColumnFeatures,
             rowCount: workflowBaselineRowCount,
             columnCount: workflowBaselineColumnCount
           }
@@ -795,6 +798,7 @@ export default function PersistentDrawerLeft({
         rowMetadataValues:
           workflowBaselineRowMetadataValues,
         rowFeatures: workflowBaselineRowFeatures,
+        columnFeatures: workflowBaselineColumnFeatures,
         rowCount: workflowBaselineRowCount,
         columnCount: workflowBaselineColumnCount
       },

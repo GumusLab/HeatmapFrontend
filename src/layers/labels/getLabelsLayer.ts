@@ -338,8 +338,24 @@ export function getLabelsLayer({
   let offset = labelsConfig?.offset ? labelsConfig.offset : DEFAULT_LABEL_OFFSET - 5;
   let totalGap = 0;
 
+  const rowSelectedCount = order.rowCat.length;
+  const colSelectedCount = order.colCat.length;
+
+  const fewerMetadataAxis =
+    rowSelectedCount === colSelectedCount
+      ? null
+      : rowSelectedCount < colSelectedCount
+        ? 'row'
+        : 'column';
+
+  const rowNamesAlongsideMetadata =
+    rowSelectedCount > 0 && fewerMetadataAxis === 'row';
+
+  const columnNamesAlongsideMetadata =
+    colSelectedCount > 0 && fewerMetadataAxis === 'column';
+
   if (axis === "row") {
-    // Add gap for row category layers
+    // Metadata will be positioned outside the variable names.
     if (order.rowCat.length > 0) {
       totalGap += order.rowCat.length * (CATEGORY_LAYER_HEIGHT + LAYER_GAP) + INITIAL_GAP;
     }
@@ -349,7 +365,7 @@ export function getLabelsLayer({
     }
   } else {
     // Column axis
-    // Add gap for column category layers
+    // Metadata will be positioned above the variable names.
     if (order.colCat.length > 0) {
       totalGap += order.colCat.length * (CATEGORY_LAYER_HEIGHT + LAYER_GAP) + INITIAL_GAP;
     }
@@ -439,8 +455,8 @@ export function getLabelsLayer({
       if (isAggregated) return "";
 
       // Hide labels when categories are selected or available in the data
-      if (axis === 'row' && (order.rowCat.length > 0 || Object.keys(categories.row).length > 0)) return "";
-      if (axis === 'column' && (order.colCat.length > 0 || Object.keys(categories.col).length > 0)) return "";
+      // Compare metadata tracks on the currently displayed axes.
+      // The parent component already passes visualOrder for transposed views.
 
       if (!labelSpace) return labelItem.text;
 
